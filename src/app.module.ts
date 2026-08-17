@@ -4,6 +4,8 @@ import { ConfigModule } from '@nestjs/config';
 import configuration from './config/configuration';
 import { envValidationSchema } from './config/env.validation';
 import { DatabaseModule } from './database/database.module';
+import { CorrelationModule } from './common/correlation/correlation.module';
+import { ClockModule } from './common/clock/clock.module';
 
 @Module({
   imports: [
@@ -19,6 +21,8 @@ import { DatabaseModule } from './database/database.module';
     }),
 
     DatabaseModule,
+    ClockModule,
+    CorrelationModule,
   ],
 })
 export class AppModule {}
