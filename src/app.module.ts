@@ -8,6 +8,7 @@ import { CorrelationModule } from './common/correlation/correlation.module';
 import { ClockModule } from './common/clock/clock.module';
 import { AppLoggerModule } from './common/logging/app-logger.module';
 import { ShutdownModule } from './common/shutdown/shutdown.module';
+import { SubscriptionModule } from './subscription/subscription.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { ShutdownModule } from './common/shutdown/shutdown.module';
     CorrelationModule,
     AppLoggerModule,
     ShutdownModule,
+    SubscriptionModule
   ],
 })
 export class AppModule {}

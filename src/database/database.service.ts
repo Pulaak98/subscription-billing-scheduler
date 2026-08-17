@@ -1,9 +1,13 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Kysely, PostgresDialect } from 'kysely';
-import { Pool } from 'pg';
+import { Pool, types } from 'pg';
 
 import { Database } from './database.types';
+
+// PostgreSQL DATE is a calendar date, not a point in time.
+// Keep it as YYYY-MM-DD instead of converting it to a JavaScript Date.
+types.setTypeParser(1082, (value) => value);
 
 @Injectable()
 export class DatabaseService
