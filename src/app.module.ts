@@ -6,6 +6,8 @@ import { envValidationSchema } from './config/env.validation';
 import { DatabaseModule } from './database/database.module';
 import { CorrelationModule } from './common/correlation/correlation.module';
 import { ClockModule } from './common/clock/clock.module';
+import { AppLoggerModule } from './common/logging/app-logger.module';
+import { ShutdownModule } from './common/shutdown/shutdown.module';
 
 @Module({
   imports: [
@@ -23,6 +25,8 @@ import { ClockModule } from './common/clock/clock.module';
     DatabaseModule,
     ClockModule,
     CorrelationModule,
+    AppLoggerModule,
+    ShutdownModule,
   ],
 })
 export class AppModule {}
