@@ -1,4 +1,5 @@
 import * as Joi from 'joi';
+
 import { isValidTimezone } from './timezone';
 
 export const envValidationSchema = Joi.object({
@@ -82,7 +83,25 @@ export const envValidationSchema = Joi.object({
     .falsy('false')
     .default(false),
 }).custom((value, helpers) => {
-  if (value.BILLING_HEARTBEAT_SECONDS >= value.BILLING_LEASE_SECONDS) {
+  /*
+   * Heartbeats should occur at most once per third of the lease duration.
+   *
+   * Example:
+   *   lease = 120s
+   *   heartbeat = 30s
+   *
+   * 30 * 3 = 90 < 120 -> valid
+   *
+   * A value such as:
+   *   lease = 120s
+   *   heartbeat = 110s
+   *
+   * 110 * 3 = 330 >= 120 -> invalid
+   */
+  if (
+    value.BILLING_HEARTBEAT_SECONDS * 3 >=
+    value.BILLING_LEASE_SECONDS
+  ) {
     return helpers.error('any.invalid');
   }
 

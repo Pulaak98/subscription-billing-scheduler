@@ -3,7 +3,10 @@ import { Kysely, sql } from 'kysely';
 export async function up(db: Kysely<unknown>): Promise<void> {
   await sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`.execute(db);
 
+  // ---------------------------------------------------------------------------
   // subscriptions
+  // ---------------------------------------------------------------------------
+
   await sql`
     CREATE TABLE subscriptions (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -56,7 +59,10 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     )
   `.execute(db);
 
+  // ---------------------------------------------------------------------------
   // scheduler_runs
+  // ---------------------------------------------------------------------------
+
   await sql`
     CREATE TABLE scheduler_runs (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -112,7 +118,10 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     )
   `.execute(db);
 
+  // ---------------------------------------------------------------------------
   // invoices
+  // ---------------------------------------------------------------------------
+
   await sql`
     CREATE TABLE invoices (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -156,6 +165,9 @@ export async function up(db: Kysely<unknown>): Promise<void> {
       CONSTRAINT invoices_total_check
         CHECK (total >= 0),
 
+      CONSTRAINT invoices_period_check
+        CHECK (billing_period_end > billing_period_start),
+
       CONSTRAINT invoices_subscription_fk
         FOREIGN KEY (subscription_id)
         REFERENCES subscriptions(id),
@@ -173,7 +185,10 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     )
   `.execute(db);
 
+  // ---------------------------------------------------------------------------
   // invoice_items
+  // ---------------------------------------------------------------------------
+
   await sql`
     CREATE TABLE invoice_items (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -194,11 +209,17 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         ON DELETE CASCADE,
 
       CONSTRAINT invoice_items_quantity_check
-        CHECK (quantity > 0)
+        CHECK (quantity > 0),
+
+      CONSTRAINT invoice_items_amounts_check
+        CHECK (unit_price >= 0 AND line_total >= 0)
     )
   `.execute(db);
 
+  // ---------------------------------------------------------------------------
   // scheduler_run_items
+  // ---------------------------------------------------------------------------
+
   await sql`
     CREATE TABLE scheduler_run_items (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -255,7 +276,10 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     )
   `.execute(db);
 
+  // ---------------------------------------------------------------------------
   // scheduler_locks
+  // ---------------------------------------------------------------------------
+
   await sql`
     CREATE TABLE scheduler_locks (
       lock_name VARCHAR(100) PRIMARY KEY,
@@ -275,7 +299,10 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     )
   `.execute(db);
 
-  // Add the subscription -> scheduler run relationship
+  // ---------------------------------------------------------------------------
+  // subscription -> scheduler run relationship
+  // ---------------------------------------------------------------------------
+
   await sql`
     ALTER TABLE subscriptions
     ADD CONSTRAINT subscriptions_processing_run_fk
@@ -283,7 +310,10 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     REFERENCES scheduler_runs(id)
   `.execute(db);
 
-  // Required indexes
+  // ---------------------------------------------------------------------------
+  // indexes
+  // ---------------------------------------------------------------------------
+
   await sql`
     CREATE INDEX subscriptions_due_idx
     ON subscriptions (
@@ -307,6 +337,11 @@ export async function up(db: Kysely<unknown>): Promise<void> {
       customer_reference,
       issue_date
     )
+  `.execute(db);
+
+  await sql`
+    CREATE INDEX invoice_items_invoice_id_idx
+    ON invoice_items (invoice_id)
   `.execute(db);
 
   await sql`
