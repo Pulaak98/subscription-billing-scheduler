@@ -19,16 +19,12 @@ export class SubscriptionController {
   ) {}
 
   @Post()
-  create(
-    @Body() dto: CreateSubscriptionDto,
-  ) {
+  create(@Body() dto: CreateSubscriptionDto) {
     return this.subscriptionService.create(dto);
   }
 
   @Get()
-  findMany(
-    @Query() query: ListSubscriptionsDto,
-  ) {
+  findMany(@Query() query: ListSubscriptionsDto) {
     return this.subscriptionService.findMany(query);
   }
 

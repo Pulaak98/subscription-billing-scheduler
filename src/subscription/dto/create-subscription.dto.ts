@@ -1,6 +1,5 @@
 import {
   IsBoolean,
-  IsDateString,
   IsInt,
   IsNotEmpty,
   IsString,
@@ -8,6 +7,8 @@ import {
   Max,
   Min,
 } from 'class-validator';
+
+const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 export class CreateSubscriptionDto {
   @IsString()
@@ -18,7 +19,7 @@ export class CreateSubscriptionDto {
   @IsNotEmpty()
   description!: string;
 
-  @Matches(/^\d+(\.\d{1,4})?$/, {
+  @Matches(/^\d+(?:\.\d{1,4})?$/, {
     message:
       'amount must be a valid positive number with up to 4 decimal places',
   })
@@ -28,10 +29,14 @@ export class CreateSubscriptionDto {
   @IsNotEmpty()
   currency!: string;
 
-  @IsDateString()
+  @Matches(DATE_ONLY_REGEX, {
+    message: 'startDate must be a valid date in YYYY-MM-DD format',
+  })
   startDate!: string;
 
-  @IsDateString()
+  @Matches(DATE_ONLY_REGEX, {
+    message: 'nextBillingDate must be a valid date in YYYY-MM-DD format',
+  })
   nextBillingDate!: string;
 
   @IsInt()

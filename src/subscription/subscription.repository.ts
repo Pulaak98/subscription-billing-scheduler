@@ -1,18 +1,16 @@
-import { Inject, Injectable } from '@nestjs/common';
-import { Kysely } from 'kysely';
+import { Injectable } from '@nestjs/common';
 
-import { Database } from '../database/database.types';
+import { DatabaseService } from '../database/database.service';
 import {
   CreateSubscriptionData,
   SubscriptionStatus,
 } from './subscription.types';
-import { DatabaseService } from '../database/database.service';
 
 @Injectable()
 export class SubscriptionRepository {
-constructor(
-  private readonly db: DatabaseService,
-) {}
+  constructor(
+    private readonly db: DatabaseService,
+  ) {}
 
   async create(data: CreateSubscriptionData) {
     return this.db

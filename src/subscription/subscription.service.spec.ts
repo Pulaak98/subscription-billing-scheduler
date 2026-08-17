@@ -1,30 +1,50 @@
 import {
-  BadRequestException,
-  NotFoundException,
-} from '@nestjs/common';
+  beforeEach,
+  describe,
+  expect,
+  it,
+  jest,
+} from '@jest/globals';
 
 import { CreateSubscriptionDto } from './dto/create-subscription.dto';
 import { ListSubscriptionsDto } from './dto/list-subscriptions.dto';
 import { SubscriptionRepository } from './subscription.repository';
 import { SubscriptionService } from './subscription.service';
-import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
-
+import {
+  CreateSubscriptionData,
+  SubscriptionStatus,
+} from './subscription.types';
 
 describe('SubscriptionService', () => {
   let service: SubscriptionService;
 
-  let repository: {
-    create: jest.MockedFunction<SubscriptionRepository['create']>;
-    findById: jest.MockedFunction<SubscriptionRepository['findById']>;
-    findMany: jest.MockedFunction<SubscriptionRepository['findMany']>;
+  const repository = {
+    create: jest.fn(
+      async (_data: CreateSubscriptionData): Promise<unknown> => {
+        return undefined;
+      },
+    ),
+
+    findById: jest.fn(
+      async (_id: string): Promise<unknown> => {
+        return undefined;
+      },
+    ),
+
+    findMany: jest.fn(
+      async (
+        _customerReference?: string,
+        _status?: SubscriptionStatus,
+        _limit?: number,
+        _offset?: number,
+      ): Promise<unknown> => {
+        return [];
+      },
+    ),
   };
 
   beforeEach(() => {
-    repository = {
-      create: jest.fn(),
-      findById: jest.fn(),
-      findMany: jest.fn(),
-    };
+    jest.clearAllMocks();
 
     service = new SubscriptionService(
       repository as unknown as SubscriptionRepository,
@@ -35,7 +55,7 @@ describe('SubscriptionService', () => {
     it('should create a subscription', async () => {
       const dto: CreateSubscriptionDto = {
         customerReference: 'CUST-1001',
-        description: 'Pro Plan - Monthly',
+        description: 'Pro Plan',
         amount: '49.0000',
         currency: 'USD',
         startDate: '2026-08-16',
@@ -45,24 +65,37 @@ describe('SubscriptionService', () => {
       };
 
       const createdSubscription = {
-        id: 'subscription-1',
+        id: 'subscription-id',
         customer_reference: 'CUST-1001',
-        description: 'Pro Plan - Monthly',
+        description: 'Pro Plan',
+        status: 'active' as const,
+        billing_state: 'ready' as const,
+        currency: 'USD',
+        amount: '49.0000',
+        start_date: '2026-08-16',
+        next_billing_date: '2026-08-31',
+        billing_anchor_day: 31,
+        anchor_is_month_end: true,
+        billing_failure_count: 0,
+        billing_retry_at: null,
+        last_billing_error_code: null,
+        last_billing_error_message: null,
+        processing_run_id: null,
+        processing_owner: null,
+        processing_started_at: null,
+        processing_expires_at: null,
+        version: 1,
       };
 
       repository.create.mockResolvedValue(
-        createdSubscription as Awaited<
-          ReturnType<SubscriptionRepository['create']>
-        >,
+        createdSubscription,
       );
 
       const result = await service.create(dto);
 
-      expect(result).toEqual(createdSubscription);
-
       expect(repository.create).toHaveBeenCalledWith({
         customerReference: 'CUST-1001',
-        description: 'Pro Plan - Monthly',
+        description: 'Pro Plan',
         amount: '49.0000',
         currency: 'USD',
         startDate: '2026-08-16',
@@ -70,66 +103,97 @@ describe('SubscriptionService', () => {
         billingAnchorDay: 31,
         anchorIsMonthEnd: true,
       });
+
+      expect(result).toEqual(createdSubscription);
     });
 
-    it('should reject when next billing date is before start date', async () => {
+    it('should reject when nextBillingDate is before startDate', async () => {
       const dto: CreateSubscriptionDto = {
         customerReference: 'CUST-1001',
         description: 'Pro Plan',
         amount: '49.0000',
         currency: 'USD',
-        startDate: '2026-08-20',
-        nextBillingDate: '2026-08-19',
-        billingAnchorDay: 20,
-        anchorIsMonthEnd: false,
+        startDate: '2026-08-31',
+        nextBillingDate: '2026-08-16',
+        billingAnchorDay: 31,
+        anchorIsMonthEnd: true,
       };
 
       await expect(
         service.create(dto),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow(
+        'nextBillingDate cannot be before startDate',
+      );
 
-      expect(repository.create).not.toHaveBeenCalled();
+      expect(
+        repository.create,
+      ).not.toHaveBeenCalled();
     });
   });
 
   describe('findById', () => {
     it('should return a subscription when it exists', async () => {
       const subscription = {
-        id: 'subscription-1',
+        id: 'subscription-id',
         customer_reference: 'CUST-1001',
+        description: 'Pro Plan',
+        status: 'active' as const,
+        billing_state: 'ready' as const,
+        currency: 'USD',
+        amount: '49.0000',
+        start_date: '2026-08-16',
+        next_billing_date: '2026-08-31',
+        billing_anchor_day: 31,
+        anchor_is_month_end: true,
+        billing_failure_count: 0,
+        billing_retry_at: null,
+        last_billing_error_code: null,
+        last_billing_error_message: null,
+        processing_run_id: null,
+        processing_owner: null,
+        processing_started_at: null,
+        processing_expires_at: null,
+        version: 1,
       };
 
       repository.findById.mockResolvedValue(
-        subscription as Awaited<
-          ReturnType<SubscriptionRepository['findById']>
-        >,
+        subscription,
       );
 
-      const result =
-        await service.findById('subscription-1');
+      const result = await service.findById(
+        'subscription-id',
+      );
+
+      expect(
+        repository.findById,
+      ).toHaveBeenCalledWith(
+        'subscription-id',
+      );
 
       expect(result).toEqual(subscription);
-
-      expect(repository.findById).toHaveBeenCalledWith(
-        'subscription-1',
-      );
     });
 
-    it('should throw NotFoundException when subscription does not exist', async () => {
-      repository.findById.mockResolvedValue(undefined);
+    it('should throw when subscription does not exist', async () => {
+      repository.findById.mockResolvedValue(
+        undefined,
+      );
 
       await expect(
         service.findById('missing-id'),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrow(
+        'Subscription not found',
+      );
 
-      expect(repository.findById).toHaveBeenCalledWith(
+      expect(
+        repository.findById,
+      ).toHaveBeenCalledWith(
         'missing-id',
       );
     });
   });
 
   describe('findMany', () => {
-    it('should return subscriptions with pagination', async () => {
+    it('should return subscriptions using pagination and filters', async () => {
       const subscriptions = [
         {
           id: 'subscription-1',
@@ -142,61 +206,50 @@ describe('SubscriptionService', () => {
       ];
 
       repository.findMany.mockResolvedValue(
-        subscriptions as Awaited<
-          ReturnType<SubscriptionRepository['findMany']>
-        >,
+        subscriptions,
       );
 
       const dto: ListSubscriptionsDto = {
         page: 2,
         limit: 10,
-      };
-
-      const result =
-        await service.findMany(dto);
-
-      expect(result).toEqual(subscriptions);
-
-      expect(repository.findMany).toHaveBeenCalledWith(
-        undefined,
-        undefined,
-        10,
-        10,
-      );
-    });
-
-    it('should pass filters to the repository', async () => {
-      const subscriptions = [
-        {
-          id: 'subscription-1',
-          customer_reference: 'CUST-1001',
-        },
-      ];
-
-      repository.findMany.mockResolvedValue(
-        subscriptions as Awaited<
-          ReturnType<SubscriptionRepository['findMany']>
-        >,
-      );
-
-      const dto: ListSubscriptionsDto = {
         customerReference: 'CUST-1001',
         status: 'active',
-        page: 1,
+      };
+
+      const result = await service.findMany(dto);
+
+      expect(
+        repository.findMany,
+      ).toHaveBeenCalledWith(
+        'CUST-1001',
+        'active',
+        10,
+        10,
+      );
+
+      expect(result).toEqual(subscriptions);
+    });
+
+    it('should calculate offset correctly without filters', async () => {
+      repository.findMany.mockResolvedValue([]);
+
+      const dto: ListSubscriptionsDto = {
+        page: 3,
         limit: 20,
       };
 
-      const result =
-        await service.findMany(dto);
+      const result = await service.findMany(dto);
 
-      expect(result).toEqual(subscriptions);
-
-      expect(repository.findMany).toHaveBeenCalledWith(
-        'CUST-1001',
-        'active',
+      expect(
+        repository.findMany,
+      ).toHaveBeenCalledWith(
+        undefined,
+        undefined,
         20,
-        0,
+        40,
       );
+
+      expect(result).toEqual([]);
     });
   });
 });

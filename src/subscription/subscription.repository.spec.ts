@@ -1,6 +1,12 @@
-import { SubscriptionRepository } from './subscription.repository';
-import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
+import {
+  beforeEach,
+  describe,
+  expect,
+  it,
+  jest,
+} from '@jest/globals';
 
+import { SubscriptionRepository } from './subscription.repository';
 
 describe('SubscriptionRepository', () => {
   let repository: SubscriptionRepository;

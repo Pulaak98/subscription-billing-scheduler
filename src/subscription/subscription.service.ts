@@ -15,10 +15,17 @@ export class SubscriptionService {
   ) {}
 
   async create(dto: CreateSubscriptionDto) {
-    const startDate = new Date(dto.startDate);
-    const nextBillingDate = new Date(dto.nextBillingDate);
-
-    if (nextBillingDate < startDate) {
+    /*
+     * These are PostgreSQL DATE values.
+     *
+     * Do not convert them to JavaScript Date objects because
+     * JavaScript Date represents a point in time and can introduce
+     * timezone shifts.
+     *
+     * YYYY-MM-DD strings can safely be compared lexicographically
+     * because ISO date components are ordered from largest to smallest.
+     */
+    if (dto.nextBillingDate < dto.startDate) {
       throw new BadRequestException(
         'nextBillingDate cannot be before startDate',
       );
