@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 import { CorrelationContextService } from '../correlation/correlation-context.service';
 
 import { LogEntry, LogLevel } from './log-entry';
-import { ConfigService } from '@nestjs/config';
 
 interface LogContext {
   runId?: string;
@@ -36,7 +36,11 @@ export class AppLoggerService {
     this.write('error', event, context);
   }
 
-  private write(level: LogLevel, event: string, context: LogContext): void {
+  private write(
+    level: LogLevel,
+    event: string,
+    context: LogContext,
+  ): void {
     const entry: LogEntry = {
       timestamp: new Date().toISOString(),
       level,
@@ -47,7 +51,9 @@ export class AppLoggerService {
       runId: context.runId,
       subscriptionId: context.subscriptionId,
 
-      instanceId: this.configService.getOrThrow<string>('APP_INSTANCE_ID'),
+      instanceId: this.configService.getOrThrow<string>(
+        'app.instanceId',
+      ),
 
       durationMs: context.durationMs,
 

@@ -3,11 +3,16 @@ import {
   NestMiddleware,
 } from '@nestjs/common';
 
-import { NextFunction, Request, Response } from 'express';
+import {
+  NextFunction,
+  Request,
+  Response,
+} from 'express';
 
 import {
   CORRELATION_ID_HEADER,
   createCorrelationId,
+  isValidCorrelationId,
 } from './correlation-id';
 
 import { CorrelationContextService } from './correlation-context.service';
@@ -27,7 +32,10 @@ export class CorrelationMiddleware implements NestMiddleware {
       request.header(CORRELATION_ID_HEADER);
 
     const correlationId =
-      incomingCorrelationId || createCorrelationId();
+      incomingCorrelationId &&
+      isValidCorrelationId(incomingCorrelationId)
+        ? incomingCorrelationId
+        : createCorrelationId();
 
     request.headers[CORRELATION_ID_HEADER] = correlationId;
 

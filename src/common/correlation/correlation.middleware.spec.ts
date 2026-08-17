@@ -1,88 +1,193 @@
-import { CorrelationMiddleware } from './correlation.middleware';
+import { describe, expect, it, jest } from '@jest/globals';
+import { NextFunction, Request, Response } from 'express';
+
+import {
+  CORRELATION_ID_HEADER,
+  createCorrelationId,
+} from './correlation-id';
 import { CorrelationContextService } from './correlation-context.service';
-import { afterAll, beforeAll, describe, expect, it, jest } from '@jest/globals';
+import { CorrelationMiddleware } from './correlation.middleware';
 
 describe('CorrelationMiddleware', () => {
-  function createResponse() {
+  function createRequest(
+    correlationId?: string,
+  ): Request {
     return {
-      setHeader: jest.fn(),
-    };
+      header: jest.fn((name: string) => {
+        if (
+          name.toLowerCase() === CORRELATION_ID_HEADER
+        ) {
+          return correlationId;
+        }
+
+        return undefined;
+      }),
+      headers: correlationId
+        ? {
+            [CORRELATION_ID_HEADER]: correlationId,
+          }
+        : {},
+    } as unknown as Request;
   }
 
-  it('should preserve an incoming correlation ID', () => {
-    const context =
-      new CorrelationContextService();
+  function createResponse(): Response {
+    return {
+      setHeader: jest.fn(),
+    } as unknown as Response;
+  }
 
-    const middleware =
-      new CorrelationMiddleware(context);
-
-    const request = {
-      header: jest.fn().mockReturnValue(
-        'incoming-correlation-id',
+  function createCorrelationContext(): CorrelationContextService {
+    return {
+      run: jest.fn(
+        (
+          correlationId: string,
+          callback: () => void,
+        ) => {
+          callback();
+          return undefined;
+        },
       ),
-      headers: {},
-    } as any;
+      getCorrelationId: jest.fn(),
+    } as unknown as CorrelationContextService;
+  }
 
+  it('should preserve a valid incoming correlation ID', () => {
+    const correlationContext = createCorrelationContext();
+    const middleware = new CorrelationMiddleware(
+      correlationContext,
+    );
+
+    const request = createRequest(
+      '550e8400-e29b-41d4-a716-446655440000',
+    );
     const response = createResponse();
+    const next: NextFunction = jest.fn();
 
-    const next = jest.fn();
+    middleware.use(request, response, next);
 
-    middleware.use(
-      request,
-      response as any,
-      next,
+    expect(response.setHeader).toHaveBeenCalledWith(
+      CORRELATION_ID_HEADER,
+      '550e8400-e29b-41d4-a716-446655440000',
     );
 
-    expect(
-      response.setHeader,
-    ).toHaveBeenCalledWith(
-      'x-correlation-id',
-      'incoming-correlation-id',
+    expect(correlationContext.run).toHaveBeenCalledWith(
+      '550e8400-e29b-41d4-a716-446655440000',
+      expect.any(Function),
     );
-
-    expect(
-      request.headers['x-correlation-id'],
-    ).toBe('incoming-correlation-id');
 
     expect(next).toHaveBeenCalled();
   });
 
   it('should generate a correlation ID when none is provided', () => {
-    const context =
-      new CorrelationContextService();
-
-    const middleware =
-      new CorrelationMiddleware(context);
-
-    const request = {
-      header: jest.fn().mockReturnValue(undefined),
-      headers: {},
-    } as any;
-
-    const response = createResponse();
-
-    const next = jest.fn();
-
-    middleware.use(
-      request,
-      response as any,
-      next,
+    const correlationContext = createCorrelationContext();
+    const middleware = new CorrelationMiddleware(
+      correlationContext,
     );
 
-    const correlationId =
-      request.headers['x-correlation-id'];
+    const request = createRequest();
+    const response = createResponse();
+    const next: NextFunction = jest.fn();
 
-    expect(correlationId).toEqual(
+    middleware.use(request, response, next);
+
+    expect(response.setHeader).toHaveBeenCalledWith(
+      CORRELATION_ID_HEADER,
       expect.any(String),
     );
 
-    expect(
-      response.setHeader,
-    ).toHaveBeenCalledWith(
-      'x-correlation-id',
-      correlationId,
+    expect(correlationContext.run).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Function),
     );
 
     expect(next).toHaveBeenCalled();
+  });
+
+  it('should generate a new correlation ID when the incoming ID is invalid', () => {
+    const correlationContext = createCorrelationContext();
+    const middleware = new CorrelationMiddleware(
+      correlationContext,
+    );
+
+    const request = createRequest(
+      'invalid-correlation-id',
+    );
+    const response = createResponse();
+    const next: NextFunction = jest.fn();
+
+    middleware.use(request, response, next);
+
+    expect(response.setHeader).toHaveBeenCalledWith(
+      CORRELATION_ID_HEADER,
+      expect.any(String),
+    );
+
+    const setHeaderMock =
+      response.setHeader as jest.MockedFunction<
+        Response['setHeader']
+      >;
+
+    const generatedCorrelationId =
+      setHeaderMock.mock.calls[0]?.[1];
+
+    expect(typeof generatedCorrelationId).toBe(
+      'string',
+    );
+
+    expect(generatedCorrelationId).not.toBe(
+      'invalid-correlation-id',
+    );
+
+    expect(createCorrelationId).toBeDefined();
+
+    expect(correlationContext.run).toHaveBeenCalledWith(
+      generatedCorrelationId as string,
+      expect.any(Function),
+    );
+
+    expect(next).toHaveBeenCalled();
+  });
+
+  it('should store the correlation ID in request headers', () => {
+    const correlationContext = createCorrelationContext();
+    const middleware = new CorrelationMiddleware(
+      correlationContext,
+    );
+
+    const request = createRequest(
+      '550e8400-e29b-41d4-a716-446655440000',
+    );
+    const response = createResponse();
+    const next: NextFunction = jest.fn();
+
+    middleware.use(request, response, next);
+
+    const correlationId =
+      request.headers[CORRELATION_ID_HEADER];
+
+    expect(correlationId).toBe(
+      '550e8400-e29b-41d4-a716-446655440000',
+    );
+  });
+
+  it('should call next inside the correlation context', () => {
+    const correlationContext = createCorrelationContext();
+    const middleware = new CorrelationMiddleware(
+      correlationContext,
+    );
+
+    const request = createRequest(
+      '550e8400-e29b-41d4-a716-446655440000',
+    );
+    const response = createResponse();
+    const next: NextFunction = jest.fn();
+
+    middleware.use(request, response, next);
+
+    expect(correlationContext.run).toHaveBeenCalledTimes(
+      1,
+    );
+
+    expect(next).toHaveBeenCalledTimes(1);
   });
 });
