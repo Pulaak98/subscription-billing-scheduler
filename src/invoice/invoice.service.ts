@@ -16,11 +16,14 @@ export class InvoiceService {
   ) {}
 
   async findMany(dto: ListInvoicesDto) {
-    const offset = (dto.page - 1) * dto.limit;
+    const offset =
+      (dto.page - 1) * dto.limit;
 
     return this.repository.findMany({
-      subscriptionId: dto.subscriptionId,
-      customerReference: dto.customerReference,
+      subscriptionId:
+        dto.subscriptionId,
+      customerReference:
+        dto.customerReference,
       status: dto.status,
       limit: dto.limit,
       offset,
@@ -29,7 +32,9 @@ export class InvoiceService {
 
   async findById(id: string) {
     const invoice =
-      await this.repository.findByIdWithItems(id);
+      await this.repository.findByIdWithItems(
+        id,
+      );
 
     if (!invoice) {
       throw new NotFoundException(
@@ -55,7 +60,9 @@ export class InvoiceService {
     }
 
     const items =
-      await this.repository.findItems(invoice.id);
+      await this.repository.findItems(
+        invoice.id,
+      );
 
     return {
       ...invoice,
@@ -63,12 +70,13 @@ export class InvoiceService {
     };
   }
 
-    async generateInvoice(
+  async generateInvoice(
     data: GenerateInvoiceData,
   ) {
     return this.repository.createInvoice(
       {
-        invoiceNumber: data.invoiceNumber,
+        invoiceNumber:
+          data.invoiceNumber,
         subscriptionId:
           data.subscriptionId,
         customerReference:
@@ -77,23 +85,32 @@ export class InvoiceService {
           data.billingPeriodStart,
         billingPeriodEnd:
           data.billingPeriodEnd,
-        issueDate: data.issueDate,
-        currency: data.currency,
-        subtotal: data.subtotal,
-        taxTotal: data.taxTotal,
+        issueDate:
+          data.issueDate,
+        currency:
+          data.currency,
+        subtotal:
+          data.subtotal,
+        taxTotal:
+          data.taxTotal,
         discountTotal:
           data.discountTotal,
-        total: data.total,
+        total:
+          data.total,
         idempotencyKey:
           data.idempotencyKey,
         generatedByRunId:
           data.generatedByRunId,
       },
       data.items.map((item) => ({
-        description: item.description,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        lineTotal: item.lineTotal,
+        description:
+          item.description,
+        quantity:
+          item.quantity,
+        unitPrice:
+          item.unitPrice,
+        lineTotal:
+          item.lineTotal,
       })),
     );
   }
