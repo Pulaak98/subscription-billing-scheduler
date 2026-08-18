@@ -43,3 +43,17 @@ export interface ClaimBatchOptions {
   processingStartedAt: Date;
   processingExpiresAt: Date;
 }
+
+export interface RecordBillingFailureOptions {
+  subscriptionId: string;
+  retryAt: Date;
+  errorCode: string;
+  errorMessage: string;
+  maxFailures: number;
+}
+
+export interface BlockSubscriptionOptions {
+  subscriptionId: string;
+  errorCode: string;
+  errorMessage: string;
+}
