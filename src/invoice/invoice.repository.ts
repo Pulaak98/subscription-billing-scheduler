@@ -1,7 +1,33 @@
 import { Injectable } from '@nestjs/common';
+import { Transaction } from 'kysely';
 
+import { Database } from '../database/database.types';
 import { DatabaseService } from '../database/database.service';
 import { InvoiceFilters } from './invoice.types';
+
+export interface CreateInvoiceData {
+  invoiceNumber: string;
+  subscriptionId: string;
+  customerReference: string;
+  billingPeriodStart: string;
+  billingPeriodEnd: string;
+  issueDate: string;
+  currency: string;
+  subtotal: string;
+  taxTotal: string;
+  discountTotal: string;
+  total: string;
+  idempotencyKey: string;
+  generatedByRunId: string;
+}
+
+export interface CreateInvoiceItemData {
+  invoiceId: string;
+  description: string;
+  quantity: string;
+  unitPrice: string;
+  lineTotal: string;
+}
 
 @Injectable()
 export class InvoiceRepository {
@@ -22,6 +48,16 @@ export class InvoiceRepository {
       .selectFrom('invoices')
       .selectAll()
       .where('invoice_number', '=', invoiceNumber)
+      .executeTakeFirst();
+  }
+
+  async findByIdempotencyKey(
+    idempotencyKey: string,
+  ) {
+    return this.db
+      .selectFrom('invoices')
+      .selectAll()
+      .where('idempotency_key', '=', idempotencyKey)
       .executeTakeFirst();
   }
 
@@ -84,5 +120,59 @@ export class InvoiceRepository {
       ...invoice,
       items,
     };
+  }
+
+    async createInvoice(
+    data: CreateInvoiceData,
+    items: Omit<
+      CreateInvoiceItemData,
+      'invoiceId'
+    >[],
+  ) {
+    return this.db.transaction().execute(
+      async (trx: Transaction<Database>) => {
+        const invoice = await trx
+          .insertInto('invoices')
+          .values({
+            invoice_number: data.invoiceNumber,
+            subscription_id: data.subscriptionId,
+            customer_reference:
+              data.customerReference,
+            billing_period_start:
+              data.billingPeriodStart,
+            billing_period_end:
+              data.billingPeriodEnd,
+            issue_date: data.issueDate,
+            status: 'issued',
+            currency: data.currency,
+            subtotal: data.subtotal,
+            tax_total: data.taxTotal,
+            discount_total: data.discountTotal,
+            total: data.total,
+            idempotency_key: data.idempotencyKey,
+            generated_by_run_id:
+              data.generatedByRunId,
+          })
+          .returningAll()
+          .executeTakeFirstOrThrow();
+
+        if (items.length > 0) {
+          await trx
+            .insertInto('invoice_items')
+            .values(
+              items.map((item) => ({
+                invoice_id: invoice.id,
+                description: item.description,
+                quantity: item.quantity,
+                unit_price: item.unitPrice,
+                line_total: item.lineTotal,
+              })),
+            )
+            .execute();
+        }
+
+        return invoice;
+      },
+    );
   }
 }

@@ -4,6 +4,9 @@ import {
 } from '@nestjs/common';
 
 import { ListInvoicesDto } from './dto/list-invoices.dto';
+import {
+  GenerateInvoiceData,
+} from './invoice.types';
 import { InvoiceRepository } from './invoice.repository';
 
 @Injectable()
@@ -58,5 +61,40 @@ export class InvoiceService {
       ...invoice,
       items,
     };
+  }
+
+    async generateInvoice(
+    data: GenerateInvoiceData,
+  ) {
+    return this.repository.createInvoice(
+      {
+        invoiceNumber: data.invoiceNumber,
+        subscriptionId:
+          data.subscriptionId,
+        customerReference:
+          data.customerReference,
+        billingPeriodStart:
+          data.billingPeriodStart,
+        billingPeriodEnd:
+          data.billingPeriodEnd,
+        issueDate: data.issueDate,
+        currency: data.currency,
+        subtotal: data.subtotal,
+        taxTotal: data.taxTotal,
+        discountTotal:
+          data.discountTotal,
+        total: data.total,
+        idempotencyKey:
+          data.idempotencyKey,
+        generatedByRunId:
+          data.generatedByRunId,
+      },
+      data.items.map((item) => ({
+        description: item.description,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        lineTotal: item.lineTotal,
+      })),
+    );
   }
 }

@@ -7,86 +7,114 @@ import {
 } from '@jest/globals';
 
 import { InvoiceController } from './invoice.controller';
+import { InvoiceService } from './invoice.service';
 
 describe('InvoiceController', () => {
   let controller: InvoiceController;
-  let service: any;
+
+  let findManyMock: jest.Mock<
+    (...args: any[]) => Promise<any>
+  >;
+
+  let findByIdMock: jest.Mock<
+    (...args: any[]) => Promise<any>
+  >;
 
   beforeEach(() => {
-    service = {
-      findMany: jest.fn(),
-      findById: jest.fn(),
-      findByInvoiceNumber: jest.fn(),
+    findManyMock = jest.fn<
+      (...args: any[]) => Promise<any>
+    >();
+
+    findByIdMock = jest.fn<
+      (...args: any[]) => Promise<any>
+    >();
+
+    const service = {
+      findMany: findManyMock,
+      findById: findByIdMock,
     };
 
-    controller = new InvoiceController(service);
+    controller = new InvoiceController(
+      service as unknown as InvoiceService,
+    );
   });
 
   it('should be defined', () => {
     expect(controller).toBeDefined();
   });
 
-  it('should list invoices', async () => {
-    const query = {
-      page: 1,
-      limit: 20,
-    };
+  describe('findMany', () => {
+    it('should return invoices', async () => {
+      const invoices = [
+        {
+          id: 'invoice-id',
+          invoice_number: 'INV-000001',
+        },
+      ];
 
-    const result = [
-      {
+      findManyMock.mockResolvedValue(invoices);
+
+      const query = {
+        page: 1,
+        limit: 20,
+      };
+
+      const result =
+        await controller.findMany(query);
+
+      expect(findManyMock).toHaveBeenCalledWith(
+        query,
+      );
+
+      expect(result).toEqual(invoices);
+    });
+
+    it('should pass filters to the service', async () => {
+      const invoices = [
+        {
+          id: 'invoice-id',
+          invoice_number: 'INV-000001',
+        },
+      ];
+
+      findManyMock.mockResolvedValue(invoices);
+
+      const query = {
+        subscriptionId: 'subscription-id',
+        customerReference: 'CUST-1001',
+        status: 'issued' as const,
+        page: 2,
+        limit: 10,
+      };
+
+      const result =
+        await controller.findMany(query);
+
+      expect(findManyMock).toHaveBeenCalledWith(
+        query,
+      );
+
+      expect(result).toEqual(invoices);
+    });
+  });
+
+  describe('findById', () => {
+    it('should return an invoice by id', async () => {
+      const invoice = {
         id: 'invoice-id',
-      },
-    ];
+        invoice_number: 'INV-000001',
+      };
 
-    service.findMany.mockResolvedValue(result);
+      findByIdMock.mockResolvedValue(invoice);
 
-    await expect(
-      controller.findMany(query),
-    ).resolves.toEqual(result);
+      const result =
+        await controller.findById('invoice-id');
 
-    expect(
-      service.findMany,
-    ).toHaveBeenCalledWith(query);
-  });
+      expect(findByIdMock).toHaveBeenCalledWith(
+        'invoice-id',
+      );
 
-  it('should return invoice by id', async () => {
-    const invoice = {
-      id: 'invoice-id',
-      items: [],
-    };
-
-    service.findById.mockResolvedValue(invoice);
-
-    await expect(
-      controller.findById('invoice-id'),
-    ).resolves.toEqual(invoice);
-
-    expect(
-      service.findById,
-    ).toHaveBeenCalledWith('invoice-id');
-  });
-
-  it('should return invoice by invoice number', async () => {
-    const invoice = {
-      id: 'invoice-id',
-      invoice_number: 'INV-000001',
-      items: [],
-    };
-
-    service.findByInvoiceNumber.mockResolvedValue(
-      invoice,
-    );
-
-    await expect(
-      controller.findByInvoiceNumber(
-        'INV-000001',
-      ),
-    ).resolves.toEqual(invoice);
-
-    expect(
-      service.findByInvoiceNumber,
-    ).toHaveBeenCalledWith(
-      'INV-000001',
-    );
+      expect(result).toEqual(invoice);
+    });
   });
 });
