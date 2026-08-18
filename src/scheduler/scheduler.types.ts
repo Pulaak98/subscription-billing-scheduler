@@ -34,3 +34,12 @@ export interface SchedulerRunFilters {
   limit: number;
   offset: number;
 }
+
+export interface ClaimBatchOptions {
+  cutoffDate: string;
+  batchSize: number;
+  ownerToken: string;
+  processingRunId: string;
+  processingStartedAt: Date;
+  processingExpiresAt: Date;
+}

@@ -8,12 +8,12 @@ import {
 
 import { SchedulerRepository } from './scheduler.repository';
 import { SchedulerService } from './scheduler.service';
+import { SubscriptionRepository } from '../subscription/subscription.repository';
 
 describe('SchedulerService', () => {
   let service: SchedulerService;
-  let repository: jest.Mocked<
-    SchedulerRepository
-  >;
+  let repository: SchedulerRepository;
+  let subscriptionRepository: SubscriptionRepository;
 
   beforeEach(() => {
     repository = {
@@ -22,9 +22,16 @@ describe('SchedulerService', () => {
       findById: jest.fn(),
       findRunItems: jest.fn(),
       completeRun: jest.fn(),
-    } as unknown as jest.Mocked<SchedulerRepository>;
+    } as unknown as SchedulerRepository;
 
-    service = new SchedulerService(repository);
+    subscriptionRepository = {
+      claimBatch: jest.fn(),
+    } as unknown as SubscriptionRepository;
+
+    service = new SchedulerService(
+      repository,
+      subscriptionRepository,
+    );
   });
 
   it('should be defined', () => {
@@ -38,15 +45,15 @@ describe('SchedulerService', () => {
         status: 'running',
       };
 
-      repository.createRun.mockResolvedValue(
-        run as never,
-      );
+      jest
+        .spyOn(repository, 'createRun')
+        .mockResolvedValue(run as never);
 
       const data = {
-        jobName: 'monthly-billing',
+        jobName: 'billing-scheduler',
         triggerType: 'scheduled' as const,
         triggeredAt: new Date(
-          '2026-08-18T10:00:00.000Z',
+          '2026-08-18T12:00:00.000Z',
         ),
         cutoffDate: '2026-08-18',
         instanceId: 'instance-1',
@@ -66,17 +73,17 @@ describe('SchedulerService', () => {
   describe('findMany', () => {
     it('should return scheduler runs', async () => {
       const runs = [
-        { id: 'run-1' },
-        { id: 'run-2' },
+        {
+          id: 'run-1',
+          status: 'completed',
+        },
       ];
 
-      repository.findMany.mockResolvedValue(
-        runs as never,
-      );
+      jest
+        .spyOn(repository, 'findMany')
+        .mockResolvedValue(runs as never);
 
       const filters = {
-        jobName: 'monthly-billing',
-        status: 'completed' as const,
         limit: 20,
         offset: 0,
       };
@@ -93,7 +100,7 @@ describe('SchedulerService', () => {
   });
 
   describe('findById', () => {
-    it('should return a run with its items', async () => {
+    it('should return a scheduler run with items', async () => {
       const run = {
         id: 'run-id',
         status: 'completed',
@@ -106,13 +113,13 @@ describe('SchedulerService', () => {
         },
       ];
 
-      repository.findById.mockResolvedValue(
-        run as never,
-      );
+      jest
+        .spyOn(repository, 'findById')
+        .mockResolvedValue(run as never);
 
-      repository.findRunItems.mockResolvedValue(
-        items as never,
-      );
+      jest
+        .spyOn(repository, 'findRunItems')
+        .mockResolvedValue(items as never);
 
       const result =
         await service.findById('run-id');
@@ -131,13 +138,13 @@ describe('SchedulerService', () => {
       });
     });
 
-    it('should throw when the run does not exist', async () => {
-      repository.findById.mockResolvedValue(
-        undefined,
-      );
+    it('should throw when scheduler run does not exist', async () => {
+      jest
+        .spyOn(repository, 'findById')
+        .mockResolvedValue(undefined);
 
       await expect(
-        service.findById('missing-id'),
+        service.findById('missing-run'),
       ).rejects.toThrow(
         'Scheduler run not found',
       );
@@ -149,29 +156,29 @@ describe('SchedulerService', () => {
   });
 
   describe('completeRun', () => {
-    it('should complete an existing run', async () => {
+    it('should complete an existing scheduler run', async () => {
       const run = {
         id: 'run-id',
         status: 'running',
       };
 
-      const completed = {
+      const updated = {
         id: 'run-id',
         status: 'completed',
       };
 
-      repository.findById.mockResolvedValue(
-        run as never,
-      );
+      jest
+        .spyOn(repository, 'findById')
+        .mockResolvedValue(run as never);
 
-      repository.completeRun.mockResolvedValue(
-        completed as never,
-      );
+      jest
+        .spyOn(repository, 'completeRun')
+        .mockResolvedValue(updated as never);
 
       const data = {
         status: 'completed' as const,
         completedAt: new Date(
-          '2026-08-18T11:00:00.000Z',
+          '2026-08-18T12:05:00.000Z',
         ),
         eligibleCount: 10,
         claimedCount: 10,
@@ -198,27 +205,31 @@ describe('SchedulerService', () => {
         data,
       );
 
-      expect(result).toEqual(completed);
+      expect(result).toEqual(updated);
     });
 
-    it('should throw when completing a missing run', async () => {
-      repository.findById.mockResolvedValue(
-        undefined,
-      );
+    it('should throw when scheduler run does not exist', async () => {
+      jest
+        .spyOn(repository, 'findById')
+        .mockResolvedValue(undefined);
+
+      const data = {
+        status: 'completed' as const,
+        completedAt: new Date(
+          '2026-08-18T12:05:00.000Z',
+        ),
+        eligibleCount: 0,
+        claimedCount: 0,
+        succeededCount: 0,
+        failedCount: 0,
+        skippedCount: 0,
+        invoicesCreatedCount: 0,
+      };
 
       await expect(
         service.completeRun(
-          'missing-id',
-          {
-            status: 'completed',
-            completedAt: new Date(),
-            eligibleCount: 0,
-            claimedCount: 0,
-            succeededCount: 0,
-            failedCount: 0,
-            skippedCount: 0,
-            invoicesCreatedCount: 0,
-          },
+          'missing-run',
+          data,
         ),
       ).rejects.toThrow(
         'Scheduler run not found',
@@ -227,6 +238,51 @@ describe('SchedulerService', () => {
       expect(
         repository.completeRun,
       ).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('claimBatch', () => {
+    it('should claim a bounded batch of subscriptions', async () => {
+      const subscriptions = [
+        {
+          id: 'subscription-1',
+          processing_run_id: 'run-id',
+        },
+        {
+          id: 'subscription-2',
+          processing_run_id: 'run-id',
+        },
+      ];
+
+      jest
+        .spyOn(subscriptionRepository, 'claimBatch')
+        .mockResolvedValue(
+          subscriptions as never,
+        );
+
+      const options = {
+        cutoffDate: '2026-08-18',
+        batchSize: 2,
+        ownerToken: 'owner-token',
+        processingRunId: 'run-id',
+        processingStartedAt: new Date(
+          '2026-08-18T12:00:00.000Z',
+        ),
+        processingExpiresAt: new Date(
+          '2026-08-18T12:01:00.000Z',
+        ),
+      };
+
+      const result =
+        await service.claimBatch(options);
+
+      expect(
+        subscriptionRepository.claimBatch,
+      ).toHaveBeenCalledWith(options);
+
+      expect(result).toEqual(
+        subscriptions,
+      );
     });
   });
 });
