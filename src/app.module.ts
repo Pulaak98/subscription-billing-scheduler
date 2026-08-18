@@ -9,6 +9,7 @@ import { ClockModule } from './common/clock/clock.module';
 import { AppLoggerModule } from './common/logging/app-logger.module';
 import { ShutdownModule } from './common/shutdown/shutdown.module';
 import { SubscriptionModule } from './subscription/subscription.module';
+import { InvoiceModule } from './invoice/invoice.module';
 
 @Module({
   imports: [
@@ -28,7 +29,8 @@ import { SubscriptionModule } from './subscription/subscription.module';
     CorrelationModule,
     AppLoggerModule,
     ShutdownModule,
-    SubscriptionModule
+    SubscriptionModule,
+    InvoiceModule
   ],
 })
 export class AppModule {}
