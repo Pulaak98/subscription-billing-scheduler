@@ -8,12 +8,14 @@ import {
 import { CreateSubscriptionDto } from './dto/create-subscription.dto';
 import { ListSubscriptionsDto } from './dto/list-subscriptions.dto';
 import { UpdateSubscriptionDto } from './dto/update-subscription.dto';
+import { MonthlyBillingRecurrenceCalculator } from './recurrence/monthly-billing-recurrence.calculator';
 import { SubscriptionRepository } from './subscription.repository';
 
 @Injectable()
 export class SubscriptionService {
   constructor(
     private readonly repository: SubscriptionRepository,
+    private readonly recurrenceCalculator: MonthlyBillingRecurrenceCalculator,
   ) {}
 
   async create(dto: CreateSubscriptionDto) {
@@ -242,5 +244,17 @@ export class SubscriptionService {
     }
 
     return updated;
+  }
+
+  calculateNextBillingDate(
+    currentBillingDate: string,
+    billingAnchorDay: number,
+    anchorIsMonthEnd: boolean,
+  ): string {
+    return this.recurrenceCalculator.calculateNextBillingDate({
+      currentBillingDate,
+      billingAnchorDay,
+      anchorIsMonthEnd,
+    });
   }
 }
