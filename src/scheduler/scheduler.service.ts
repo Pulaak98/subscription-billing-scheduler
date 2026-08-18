@@ -7,13 +7,16 @@ import {
   CompleteSchedulerRunData,
   CreateSchedulerRunData,
   SchedulerRunFilters,
+  ClaimBatchOptions,
 } from './scheduler.types';
 import { SchedulerRepository } from './scheduler.repository';
+import { SubscriptionRepository } from '../subscription/subscription.repository';
 
 @Injectable()
 export class SchedulerService {
   constructor(
     private readonly repository: SchedulerRepository,
+    private readonly subscriptionRepository: SubscriptionRepository,
   ) {}
 
   async createRun(
@@ -59,5 +62,21 @@ export class SchedulerService {
     }
 
     return this.repository.completeRun(id, data);
+  }
+
+  async claimBatch(
+    options: ClaimBatchOptions,
+  ) {
+    return this.subscriptionRepository.claimBatch({
+      cutoffDate: options.cutoffDate,
+      batchSize: options.batchSize,
+      ownerToken: options.ownerToken,
+      processingRunId:
+        options.processingRunId,
+      processingStartedAt:
+        options.processingStartedAt,
+      processingExpiresAt:
+        options.processingExpiresAt,
+    });
   }
 }

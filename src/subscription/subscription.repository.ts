@@ -7,6 +7,15 @@ import {
   UpdateSubscriptionData,
 } from './subscription.types';
 
+export interface ClaimSubscriptionsData {
+  cutoffDate: string;
+  batchSize: number;
+  ownerToken: string;
+  processingRunId: string;
+  processingStartedAt: Date;
+  processingExpiresAt: Date;
+}
+
 @Injectable()
 export class SubscriptionRepository {
   constructor(
@@ -72,6 +81,69 @@ export class SubscriptionRepository {
       .orderBy('id', 'desc')
       .limit(limit)
       .offset(offset)
+      .execute();
+  }
+
+  async claimBatch(data: ClaimSubscriptionsData) {
+    return this.db
+      .updateTable('subscriptions')
+      .set({
+        processing_run_id:
+          data.processingRunId,
+        processing_owner:
+          data.ownerToken,
+        processing_started_at:
+          data.processingStartedAt,
+        processing_expires_at:
+          data.processingExpiresAt,
+      })
+      .where(
+        'id',
+        'in',
+        this.db
+          .selectFrom('subscriptions')
+          .select('id')
+          .where('status', '=', 'active')
+          .where('next_billing_date', '<=', data.cutoffDate)
+          .where((eb) =>
+            eb.or([
+              eb('billing_state', '=', 'ready'),
+              eb.and([
+                eb(
+                  'billing_state',
+                  '=',
+                  'retry_wait',
+                ),
+                eb(
+                  'billing_retry_at',
+                  '<=',
+                  data.processingStartedAt,
+                ),
+              ]),
+            ]),
+          )
+          .where((eb) =>
+            eb.or([
+              eb(
+                'processing_expires_at',
+                'is',
+                null,
+              ),
+              eb(
+                'processing_expires_at',
+                '<',
+                data.processingStartedAt,
+              ),
+            ]),
+          )
+          .orderBy(
+            'next_billing_date',
+            'asc',
+          )
+          .orderBy('id', 'asc')
+          .limit(data.batchSize),
+      )
+      .returningAll()
       .execute();
   }
 

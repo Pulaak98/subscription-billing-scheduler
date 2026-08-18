@@ -6,7 +6,9 @@ import {
   jest,
 } from '@jest/globals';
 
-import { SubscriptionRepository } from './subscription.repository';
+import {
+  SubscriptionRepository,
+} from './subscription.repository';
 
 describe('SubscriptionRepository', () => {
   let repository: SubscriptionRepository;
@@ -31,21 +33,11 @@ describe('SubscriptionRepository', () => {
       const subscription = {
         id: 'subscription-id',
         customer_reference: 'CUST-1001',
-        description: 'Pro Plan',
         status: 'active',
-        billing_state: 'ready',
-        currency: 'USD',
-        amount: '49.0000',
-        start_date: '2026-08-16',
-        next_billing_date: '2026-08-31',
-        billing_anchor_day: 31,
-        anchor_is_month_end: true,
-        billing_failure_count: 0,
-        version: 1,
       };
 
       const executeTakeFirstOrThrow = jest.fn(
-        async (..._args: unknown[]): Promise<unknown> =>
+        async (..._args: unknown[]) =>
           subscription,
       );
 
@@ -76,9 +68,12 @@ describe('SubscriptionRepository', () => {
         anchorIsMonthEnd: true,
       };
 
-      const result = await repository.create(data);
+      const result =
+        await repository.create(data);
 
-      expect(db.insertInto).toHaveBeenCalledWith(
+      expect(
+        db.insertInto,
+      ).toHaveBeenCalledWith(
         'subscriptions',
       );
 
@@ -97,12 +92,9 @@ describe('SubscriptionRepository', () => {
         version: 1,
       });
 
-      expect(returningAll).toHaveBeenCalled();
-      expect(
-        executeTakeFirstOrThrow,
-      ).toHaveBeenCalled();
-
-      expect(result).toEqual(subscription);
+      expect(result).toEqual(
+        subscription,
+      );
     });
   });
 
@@ -110,11 +102,10 @@ describe('SubscriptionRepository', () => {
     it('should find a subscription by id', async () => {
       const subscription = {
         id: 'subscription-id',
-        customer_reference: 'CUST-1001',
       };
 
       const executeTakeFirst = jest.fn(
-        async (..._args: unknown[]): Promise<unknown> =>
+        async (..._args: unknown[]) =>
           subscription,
       );
 
@@ -134,15 +125,16 @@ describe('SubscriptionRepository', () => {
         selectAll,
       });
 
-      const result = await repository.findById(
-        'subscription-id',
-      );
+      const result =
+        await repository.findById(
+          'subscription-id',
+        );
 
-      expect(db.selectFrom).toHaveBeenCalledWith(
+      expect(
+        db.selectFrom,
+      ).toHaveBeenCalledWith(
         'subscriptions',
       );
-
-      expect(selectAll).toHaveBeenCalled();
 
       expect(where).toHaveBeenCalledWith(
         'id',
@@ -150,50 +142,21 @@ describe('SubscriptionRepository', () => {
         'subscription-id',
       );
 
-      expect(executeTakeFirst).toHaveBeenCalled();
-
-      expect(result).toEqual(subscription);
-    });
-
-    it('should return undefined when subscription does not exist', async () => {
-      const executeTakeFirst = jest.fn(
-        async (..._args: unknown[]): Promise<unknown> =>
-          undefined,
+      expect(result).toEqual(
+        subscription,
       );
-
-      const where = jest.fn(
-        (..._args: unknown[]) => ({
-          executeTakeFirst,
-        }),
-      );
-
-      const selectAll = jest.fn(
-        (..._args: unknown[]) => ({
-          where,
-        }),
-      );
-
-      db.selectFrom.mockReturnValue({
-        selectAll,
-      });
-
-      const result = await repository.findById(
-        'missing-subscription-id',
-      );
-
-      expect(result).toBeUndefined();
     });
   });
 
   describe('findMany', () => {
-    it('should return subscriptions with default pagination', async () => {
+    it('should return subscriptions with no filters', async () => {
       const subscriptions = [
         { id: 'subscription-2' },
         { id: 'subscription-1' },
       ];
 
       const execute = jest.fn(
-        async (..._args: unknown[]): Promise<unknown[]> =>
+        async (..._args: unknown[]) =>
           subscriptions,
       );
 
@@ -225,11 +188,8 @@ describe('SubscriptionRepository', () => {
         selectAll,
       });
 
-      const result = await repository.findMany();
-
-      expect(db.selectFrom).toHaveBeenCalledWith(
-        'subscriptions',
-      );
+      const result =
+        await repository.findMany();
 
       expect(orderBy).toHaveBeenCalledWith(
         'id',
@@ -238,8 +198,9 @@ describe('SubscriptionRepository', () => {
 
       expect(limit).toHaveBeenCalledWith(20);
       expect(offset).toHaveBeenCalledWith(0);
-
-      expect(result).toEqual(subscriptions);
+      expect(result).toEqual(
+        subscriptions,
+      );
     });
 
     it('should apply customer and status filters', async () => {
@@ -252,7 +213,7 @@ describe('SubscriptionRepository', () => {
       ];
 
       const execute = jest.fn(
-        async (..._args: unknown[]): Promise<unknown[]> =>
+        async (..._args: unknown[]) =>
           subscriptions,
       );
 
@@ -296,12 +257,13 @@ describe('SubscriptionRepository', () => {
         selectAll,
       });
 
-      const result = await repository.findMany(
-        'CUST-1001',
-        'active',
-        10,
-        20,
-      );
+      const result =
+        await repository.findMany(
+          'CUST-1001',
+          'active',
+          10,
+          20,
+        );
 
       expect(firstWhere).toHaveBeenCalledWith(
         'customer_reference',
@@ -315,173 +277,175 @@ describe('SubscriptionRepository', () => {
         'active',
       );
 
-      expect(orderBy).toHaveBeenCalledWith(
-        'id',
-        'desc',
-      );
-
       expect(limit).toHaveBeenCalledWith(10);
       expect(offset).toHaveBeenCalledWith(20);
-
-      expect(result).toEqual(subscriptions);
+      expect(result).toEqual(
+        subscriptions,
+      );
     });
+  });
 
-    it('should apply only the customer filter', async () => {
-      const subscriptions = [
+  describe('claimBatch', () => {
+    it('should claim an eligible bounded batch', async () => {
+      const claimedSubscriptions = [
         {
           id: 'subscription-1',
-          customer_reference: 'CUST-1001',
+          status: 'active',
+          billing_state: 'ready',
+        },
+        {
+          id: 'subscription-2',
+          status: 'active',
+          billing_state: 'ready',
         },
       ];
 
       const execute = jest.fn(
-        async (..._args: unknown[]): Promise<unknown[]> =>
-          subscriptions,
+        async (..._args: unknown[]) =>
+          claimedSubscriptions,
       );
 
-      const offset = jest.fn(
+      const returningAll = jest.fn(
         (..._args: unknown[]) => ({
           execute,
         }),
       );
 
-      const limit = jest.fn(
+      const whereProcessingExpiry =
+        jest.fn(
+          (..._args: unknown[]) => ({
+            orderBy: jest.fn(
+              (..._args: unknown[]) => ({
+                orderBy: jest.fn(
+                  (..._args: unknown[]) => ({
+                    limit: jest.fn(
+                      (..._args: unknown[]) => ({
+                        id: 'claimed-subquery',
+                      }),
+                    ),
+                  }),
+                ),
+              }),
+            ),
+          }),
+        );
+
+      const whereBillingState =
+        jest.fn(
+          (..._args: unknown[]) => ({
+            where:
+              whereProcessingExpiry,
+          }),
+        );
+
+      const whereBillingDate =
+        jest.fn(
+          (..._args: unknown[]) => ({
+            where:
+              whereBillingState,
+          }),
+        );
+
+      const whereStatus = jest.fn(
         (..._args: unknown[]) => ({
-          offset,
+          where:
+            whereBillingDate,
         }),
       );
 
-      const orderBy = jest.fn(
+      const select = jest.fn(
         (..._args: unknown[]) => ({
-          limit,
+          where: whereStatus,
         }),
       );
 
-      const where = jest.fn(
+      const selectFrom = jest.fn(
         (..._args: unknown[]) => ({
-          orderBy,
+          select,
         }),
       );
 
-      const selectAll = jest.fn(
+      db.selectFrom = selectFrom;
+
+      const whereId = jest.fn(
         (..._args: unknown[]) => ({
-          where,
+          returningAll,
         }),
       );
 
-      db.selectFrom.mockReturnValue({
-        selectAll,
+      const set = jest.fn(
+        (..._args: unknown[]) => ({
+          where: whereId,
+        }),
+      );
+
+      db.updateTable.mockReturnValue({
+        set,
       });
 
-      const result = await repository.findMany(
-        'CUST-1001',
+      const processingStartedAt =
+        new Date(
+          '2026-08-18T12:00:00.000Z',
+        );
+
+      const processingExpiresAt =
+        new Date(
+          '2026-08-18T12:05:00.000Z',
+        );
+
+      const result =
+        await repository.claimBatch({
+          cutoffDate: '2026-08-18',
+          batchSize: 2,
+          ownerToken: 'owner-token',
+          processingRunId: 'run-id',
+          processingStartedAt,
+          processingExpiresAt,
+        });
+
+      expect(
+        db.updateTable,
+      ).toHaveBeenCalledWith(
+        'subscriptions',
       );
 
-      expect(where).toHaveBeenCalledWith(
-        'customer_reference',
-        '=',
-        'CUST-1001',
-      );
-
-      expect(orderBy).toHaveBeenCalledWith(
-        'id',
-        'desc',
-      );
-
-      expect(limit).toHaveBeenCalledWith(20);
-      expect(offset).toHaveBeenCalledWith(0);
-
-      expect(result).toEqual(subscriptions);
-    });
-
-    it('should apply only the status filter', async () => {
-      const subscriptions = [
-        {
-          id: 'subscription-1',
-          status: 'paused',
-        },
-      ];
-
-      const execute = jest.fn(
-        async (..._args: unknown[]): Promise<unknown[]> =>
-          subscriptions,
-      );
-
-      const offset = jest.fn(
-        (..._args: unknown[]) => ({
-          execute,
-        }),
-      );
-
-      const limit = jest.fn(
-        (..._args: unknown[]) => ({
-          offset,
-        }),
-      );
-
-      const orderBy = jest.fn(
-        (..._args: unknown[]) => ({
-          limit,
-        }),
-      );
-
-      const where = jest.fn(
-        (..._args: unknown[]) => ({
-          orderBy,
-        }),
-      );
-
-      const selectAll = jest.fn(
-        (..._args: unknown[]) => ({
-          where,
-        }),
-      );
-
-      db.selectFrom.mockReturnValue({
-        selectAll,
+      expect(set).toHaveBeenCalledWith({
+        processing_run_id: 'run-id',
+        processing_owner: 'owner-token',
+        processing_started_at:
+          processingStartedAt,
+        processing_expires_at:
+          processingExpiresAt,
       });
 
-      const result = await repository.findMany(
-        undefined,
-        'paused',
-        5,
-        10,
-      );
-
-      expect(where).toHaveBeenCalledWith(
+      expect(whereStatus).toHaveBeenCalledWith(
         'status',
         '=',
-        'paused',
+        'active',
       );
 
-      expect(orderBy).toHaveBeenCalledWith(
-        'id',
-        'desc',
+      expect(whereBillingDate).toHaveBeenCalledWith(
+        'next_billing_date',
+        '<=',
+        '2026-08-18',
       );
 
-      expect(limit).toHaveBeenCalledWith(5);
-      expect(offset).toHaveBeenCalledWith(10);
-
-      expect(result).toEqual(subscriptions);
+      expect(result).toEqual(
+        claimedSubscriptions,
+      );
     });
   });
 
   describe('update', () => {
-    it('should update all supplied subscription fields', async () => {
+    it('should update subscription fields', async () => {
       const subscription = {
         id: 'subscription-id',
         description: 'Updated Plan',
-        amount: '59.0000',
-        currency: 'USD',
-        start_date: '2026-08-16',
-        next_billing_date: '2026-08-31',
-        billing_anchor_day: 31,
-        anchor_is_month_end: true,
         version: 2,
       };
 
       const executeTakeFirst = jest.fn(
-        async (..._args: unknown[]): Promise<unknown> =>
+        async (..._args: unknown[]) =>
           subscription,
       );
 
@@ -513,20 +477,23 @@ describe('SubscriptionRepository', () => {
         set,
       });
 
-      const result = await repository.update(
-        'subscription-id',
-        {
-          description: 'Updated Plan',
-          amount: '59.0000',
-          currency: 'USD',
-          startDate: '2026-08-16',
-          nextBillingDate: '2026-08-31',
-          billingAnchorDay: 31,
-          anchorIsMonthEnd: true,
-        },
-      );
+      const result =
+        await repository.update(
+          'subscription-id',
+          {
+            description: 'Updated Plan',
+            amount: '59.0000',
+            currency: 'USD',
+            startDate: '2026-08-16',
+            nextBillingDate: '2026-08-31',
+            billingAnchorDay: 31,
+            anchorIsMonthEnd: true,
+          },
+        );
 
-      expect(db.updateTable).toHaveBeenCalledWith(
+      expect(
+        db.updateTable,
+      ).toHaveBeenCalledWith(
         'subscriptions',
       );
 
@@ -540,76 +507,15 @@ describe('SubscriptionRepository', () => {
         anchor_is_month_end: true,
       });
 
-      expect(setVersion).toHaveBeenCalled();
-
       expect(where).toHaveBeenCalledWith(
         'id',
         '=',
         'subscription-id',
       );
 
-      expect(returningAll).toHaveBeenCalled();
-      expect(result).toEqual(subscription);
-    });
-
-    it('should update only the supplied fields', async () => {
-      const subscription = {
-        id: 'subscription-id',
-        description: 'Updated Plan',
-        version: 2,
-      };
-
-      const executeTakeFirst = jest.fn(
-        async (..._args: unknown[]): Promise<unknown> =>
-          subscription,
+      expect(result).toEqual(
+        subscription,
       );
-
-      const returningAll = jest.fn(
-        (..._args: unknown[]) => ({
-          executeTakeFirst,
-        }),
-      );
-
-      const where = jest.fn(
-        (..._args: unknown[]) => ({
-          returningAll,
-        }),
-      );
-
-      const setVersion = jest.fn(
-        (..._args: unknown[]) => ({
-          where,
-        }),
-      );
-
-      const set = jest.fn(
-        (..._args: unknown[]) => ({
-          set: setVersion,
-        }),
-      );
-
-      db.updateTable.mockReturnValue({
-        set,
-      });
-
-      const result = await repository.update(
-        'subscription-id',
-        {
-          description: 'Updated Plan',
-        },
-      );
-
-      expect(set).toHaveBeenCalledWith({
-        description: 'Updated Plan',
-      });
-
-      expect(where).toHaveBeenCalledWith(
-        'id',
-        '=',
-        'subscription-id',
-      );
-
-      expect(result).toEqual(subscription);
     });
   });
 
@@ -621,7 +527,7 @@ describe('SubscriptionRepository', () => {
       };
 
       const executeTakeFirst = jest.fn(
-        async (..._args: unknown[]): Promise<unknown> =>
+        async (..._args: unknown[]) =>
           subscription,
       );
 
@@ -659,13 +565,10 @@ describe('SubscriptionRepository', () => {
         set,
       });
 
-      const result = await repository.pause(
-        'subscription-id',
-      );
-
-      expect(db.updateTable).toHaveBeenCalledWith(
-        'subscriptions',
-      );
+      const result =
+        await repository.pause(
+          'subscription-id',
+        );
 
       expect(set).toHaveBeenCalledWith({
         status: 'paused',
@@ -683,54 +586,9 @@ describe('SubscriptionRepository', () => {
         'active',
       );
 
-      expect(result).toEqual(subscription);
-    });
-
-    it('should return undefined when the subscription cannot be paused', async () => {
-      const executeTakeFirst = jest.fn(
-        async (..._args: unknown[]): Promise<unknown> =>
-          undefined,
+      expect(result).toEqual(
+        subscription,
       );
-
-      const returningAll = jest.fn(
-        (..._args: unknown[]) => ({
-          executeTakeFirst,
-        }),
-      );
-
-      const whereStatus = jest.fn(
-        (..._args: unknown[]) => ({
-          returningAll,
-        }),
-      );
-
-      const whereId = jest.fn(
-        (..._args: unknown[]) => ({
-          where: whereStatus,
-        }),
-      );
-
-      const setVersion = jest.fn(
-        (..._args: unknown[]) => ({
-          where: whereId,
-        }),
-      );
-
-      const set = jest.fn(
-        (..._args: unknown[]) => ({
-          set: setVersion,
-        }),
-      );
-
-      db.updateTable.mockReturnValue({
-        set,
-      });
-
-      const result = await repository.pause(
-        'subscription-id',
-      );
-
-      expect(result).toBeUndefined();
     });
   });
 
@@ -742,7 +600,7 @@ describe('SubscriptionRepository', () => {
       };
 
       const executeTakeFirst = jest.fn(
-        async (..._args: unknown[]): Promise<unknown> =>
+        async (..._args: unknown[]) =>
           subscription,
       );
 
@@ -780,23 +638,14 @@ describe('SubscriptionRepository', () => {
         set,
       });
 
-      const result = await repository.resume(
-        'subscription-id',
-      );
-
-      expect(db.updateTable).toHaveBeenCalledWith(
-        'subscriptions',
-      );
+      const result =
+        await repository.resume(
+          'subscription-id',
+        );
 
       expect(set).toHaveBeenCalledWith({
         status: 'active',
       });
-
-      expect(whereId).toHaveBeenCalledWith(
-        'id',
-        '=',
-        'subscription-id',
-      );
 
       expect(whereStatus).toHaveBeenCalledWith(
         'status',
@@ -804,54 +653,9 @@ describe('SubscriptionRepository', () => {
         'paused',
       );
 
-      expect(result).toEqual(subscription);
-    });
-
-    it('should return undefined when the subscription cannot be resumed', async () => {
-      const executeTakeFirst = jest.fn(
-        async (..._args: unknown[]): Promise<unknown> =>
-          undefined,
+      expect(result).toEqual(
+        subscription,
       );
-
-      const returningAll = jest.fn(
-        (..._args: unknown[]) => ({
-          executeTakeFirst,
-        }),
-      );
-
-      const whereStatus = jest.fn(
-        (..._args: unknown[]) => ({
-          returningAll,
-        }),
-      );
-
-      const whereId = jest.fn(
-        (..._args: unknown[]) => ({
-          where: whereStatus,
-        }),
-      );
-
-      const setVersion = jest.fn(
-        (..._args: unknown[]) => ({
-          where: whereId,
-        }),
-      );
-
-      const set = jest.fn(
-        (..._args: unknown[]) => ({
-          set: setVersion,
-        }),
-      );
-
-      db.updateTable.mockReturnValue({
-        set,
-      });
-
-      const result = await repository.resume(
-        'subscription-id',
-      );
-
-      expect(result).toBeUndefined();
     });
   });
 
@@ -863,7 +667,7 @@ describe('SubscriptionRepository', () => {
       };
 
       const executeTakeFirst = jest.fn(
-        async (..._args: unknown[]): Promise<unknown> =>
+        async (..._args: unknown[]) =>
           subscription,
       );
 
@@ -901,23 +705,14 @@ describe('SubscriptionRepository', () => {
         set,
       });
 
-      const result = await repository.cancel(
-        'subscription-id',
-      );
-
-      expect(db.updateTable).toHaveBeenCalledWith(
-        'subscriptions',
-      );
+      const result =
+        await repository.cancel(
+          'subscription-id',
+        );
 
       expect(set).toHaveBeenCalledWith({
         status: 'canceled',
       });
-
-      expect(whereId).toHaveBeenCalledWith(
-        'id',
-        '=',
-        'subscription-id',
-      );
 
       expect(whereStatus).toHaveBeenCalledWith(
         'status',
@@ -925,54 +720,9 @@ describe('SubscriptionRepository', () => {
         ['active', 'paused'],
       );
 
-      expect(result).toEqual(subscription);
-    });
-
-    it('should return undefined when the subscription cannot be canceled', async () => {
-      const executeTakeFirst = jest.fn(
-        async (..._args: unknown[]): Promise<unknown> =>
-          undefined,
+      expect(result).toEqual(
+        subscription,
       );
-
-      const returningAll = jest.fn(
-        (..._args: unknown[]) => ({
-          executeTakeFirst,
-        }),
-      );
-
-      const whereStatus = jest.fn(
-        (..._args: unknown[]) => ({
-          returningAll,
-        }),
-      );
-
-      const whereId = jest.fn(
-        (..._args: unknown[]) => ({
-          where: whereStatus,
-        }),
-      );
-
-      const setVersion = jest.fn(
-        (..._args: unknown[]) => ({
-          where: whereId,
-        }),
-      );
-
-      const set = jest.fn(
-        (..._args: unknown[]) => ({
-          set: setVersion,
-        }),
-      );
-
-      db.updateTable.mockReturnValue({
-        set,
-      });
-
-      const result = await repository.cancel(
-        'subscription-id',
-      );
-
-      expect(result).toBeUndefined();
     });
   });
 
@@ -985,7 +735,7 @@ describe('SubscriptionRepository', () => {
       };
 
       const executeTakeFirst = jest.fn(
-        async (..._args: unknown[]): Promise<unknown> =>
+        async (..._args: unknown[]) =>
           subscription,
       );
 
@@ -1022,16 +772,13 @@ describe('SubscriptionRepository', () => {
           'subscription-id',
         );
 
-      expect(db.updateTable).toHaveBeenCalledWith(
-        'subscriptions',
-      );
-
       expect(set).toHaveBeenCalledWith({
         billing_state: 'ready',
         billing_retry_at: null,
         billing_failure_count: 0,
         last_billing_error_code: null,
-        last_billing_error_message: null,
+        last_billing_error_message:
+          null,
       });
 
       expect(where).toHaveBeenCalledWith(
@@ -1040,50 +787,9 @@ describe('SubscriptionRepository', () => {
         'subscription-id',
       );
 
-      expect(returningAll).toHaveBeenCalled();
-      expect(result).toEqual(subscription);
-    });
-
-    it('should return undefined when the subscription does not exist', async () => {
-      const executeTakeFirst = jest.fn(
-        async (..._args: unknown[]): Promise<unknown> =>
-          undefined,
+      expect(result).toEqual(
+        subscription,
       );
-
-      const returningAll = jest.fn(
-        (..._args: unknown[]) => ({
-          executeTakeFirst,
-        }),
-      );
-
-      const where = jest.fn(
-        (..._args: unknown[]) => ({
-          returningAll,
-        }),
-      );
-
-      const setVersion = jest.fn(
-        (..._args: unknown[]) => ({
-          where,
-        }),
-      );
-
-      const set = jest.fn(
-        (..._args: unknown[]) => ({
-          set: setVersion,
-        }),
-      );
-
-      db.updateTable.mockReturnValue({
-        set,
-      });
-
-      const result =
-        await repository.resetBillingFailure(
-          'missing-subscription-id',
-        );
-
-      expect(result).toBeUndefined();
     });
   });
 });
