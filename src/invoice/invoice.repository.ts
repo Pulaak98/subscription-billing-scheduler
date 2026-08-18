@@ -43,7 +43,9 @@ export class InvoiceRepository {
       .executeTakeFirst();
   }
 
-  async findByInvoiceNumber(invoiceNumber: string) {
+  async findByInvoiceNumber(
+    invoiceNumber: string,
+  ) {
     return this.db
       .selectFrom('invoices')
       .selectAll()
@@ -57,7 +59,11 @@ export class InvoiceRepository {
     return this.db
       .selectFrom('invoices')
       .selectAll()
-      .where('idempotency_key', '=', idempotencyKey)
+      .where(
+        'idempotency_key',
+        '=',
+        idempotencyKey,
+      )
       .executeTakeFirst();
   }
 
@@ -122,57 +128,112 @@ export class InvoiceRepository {
     };
   }
 
-    async createInvoice(
+  async createInvoice(
     data: CreateInvoiceData,
     items: Omit<
       CreateInvoiceItemData,
       'invoiceId'
     >[],
   ) {
-    return this.db.transaction().execute(
-      async (trx: Transaction<Database>) => {
-        const invoice = await trx
-          .insertInto('invoices')
-          .values({
-            invoice_number: data.invoiceNumber,
-            subscription_id: data.subscriptionId,
-            customer_reference:
-              data.customerReference,
-            billing_period_start:
-              data.billingPeriodStart,
-            billing_period_end:
-              data.billingPeriodEnd,
-            issue_date: data.issueDate,
-            status: 'issued',
-            currency: data.currency,
-            subtotal: data.subtotal,
-            tax_total: data.taxTotal,
-            discount_total: data.discountTotal,
-            total: data.total,
-            idempotency_key: data.idempotencyKey,
-            generated_by_run_id:
-              data.generatedByRunId,
-          })
-          .returningAll()
-          .executeTakeFirstOrThrow();
+    const existingInvoice =
+      await this.findByIdempotencyKey(
+        data.idempotencyKey,
+      );
 
-        if (items.length > 0) {
-          await trx
-            .insertInto('invoice_items')
-            .values(
-              items.map((item) => ({
-                invoice_id: invoice.id,
-                description: item.description,
-                quantity: item.quantity,
-                unit_price: item.unitPrice,
-                line_total: item.lineTotal,
-              })),
-            )
-            .execute();
+    if (existingInvoice) {
+      return existingInvoice;
+    }
+
+    try {
+      return await this.db
+        .transaction()
+        .execute(
+          async (
+            trx: Transaction<Database>,
+          ) => {
+            const invoice = await trx
+              .insertInto('invoices')
+              .values({
+                invoice_number:
+                  data.invoiceNumber,
+                subscription_id:
+                  data.subscriptionId,
+                customer_reference:
+                  data.customerReference,
+                billing_period_start:
+                  data.billingPeriodStart,
+                billing_period_end:
+                  data.billingPeriodEnd,
+                issue_date: data.issueDate,
+                status: 'issued',
+                currency: data.currency,
+                subtotal: data.subtotal,
+                tax_total: data.taxTotal,
+                discount_total:
+                  data.discountTotal,
+                total: data.total,
+                idempotency_key:
+                  data.idempotencyKey,
+                generated_by_run_id:
+                  data.generatedByRunId,
+              })
+              .returningAll()
+              .executeTakeFirstOrThrow();
+
+            if (items.length > 0) {
+              await trx
+                .insertInto('invoice_items')
+                .values(
+                  items.map((item) => ({
+                    invoice_id: invoice.id,
+                    description:
+                      item.description,
+                    quantity: item.quantity,
+                    unit_price:
+                      item.unitPrice,
+                    line_total:
+                      item.lineTotal,
+                  })),
+                )
+                .execute();
+            }
+
+            return invoice;
+          },
+        );
+    } catch (error: unknown) {
+      if (
+        this.isUniqueViolation(error)
+      ) {
+        const duplicate =
+          await this.findByIdempotencyKey(
+            data.idempotencyKey,
+          );
+
+        if (duplicate) {
+          return duplicate;
         }
+      }
 
-        return invoice;
-      },
-    );
+      throw error;
+    }
+  }
+
+  private isUniqueViolation(
+    error: unknown,
+  ): boolean {
+    if (
+      typeof error !== 'object' ||
+      error === null
+    ) {
+      return false;
+    }
+
+    const databaseError =
+      error as {
+        code?: string;
+      };
+
+    return databaseError.code === '23505';
   }
 }
