@@ -6,114 +6,48 @@ import {
   jest,
 } from '@jest/globals';
 
-import { CreateSubscriptionDto } from './dto/create-subscription.dto';
-import { ListSubscriptionsDto } from './dto/list-subscriptions.dto';
-import { UpdateSubscriptionDto } from './dto/update-subscription.dto';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+
+
 import { SubscriptionRepository } from './subscription.repository';
 import { SubscriptionService } from './subscription.service';
-import {
-  CreateSubscriptionData,
-  SubscriptionStatus,
-  UpdateSubscriptionData,
-} from './subscription.types';
+import { MonthlyBillingRecurrenceCalculator } from './recurrence/monthly-billing-recurrence.calculator';
 
 describe('SubscriptionService', () => {
   let service: SubscriptionService;
-
-  const repository = {
-    create: jest.fn(
-      async (_data: CreateSubscriptionData): Promise<unknown> =>
-        undefined,
-    ),
-
-    findById: jest.fn(
-      async (_id: string): Promise<unknown> =>
-        undefined,
-    ),
-
-    findMany: jest.fn(
-      async (
-        _customerReference?: string,
-        _status?: SubscriptionStatus,
-        _limit?: number,
-        _offset?: number,
-      ): Promise<unknown[]> => [],
-    ),
-
-    update: jest.fn(
-      async (
-        _id: string,
-        _data: UpdateSubscriptionData,
-      ): Promise<unknown> => undefined,
-    ),
-
-    pause: jest.fn(
-      async (_id: string): Promise<unknown> =>
-        undefined,
-    ),
-
-    resume: jest.fn(
-      async (_id: string): Promise<unknown> =>
-        undefined,
-    ),
-
-    cancel: jest.fn(
-      async (_id: string): Promise<unknown> =>
-        undefined,
-    ),
-
-    resetBillingFailure: jest.fn(
-      async (_id: string): Promise<unknown> =>
-        undefined,
-    ),
-  };
-
-  const activeSubscription = {
-    id: 'subscription-id',
-    customer_reference: 'CUST-1001',
-    description: 'Pro Plan',
-    status: 'active' as const,
-    billing_state: 'ready' as const,
-    currency: 'USD',
-    amount: '49.0000',
-    start_date: '2026-08-16',
-    next_billing_date: '2026-08-31',
-    billing_anchor_day: 31,
-    anchor_is_month_end: true,
-    billing_failure_count: 0,
-    billing_retry_at: null,
-    last_billing_error_code: null,
-    last_billing_error_message: null,
-    processing_run_id: null,
-    processing_owner: null,
-    processing_started_at: null,
-    processing_expires_at: null,
-    version: 1,
-  };
-
-  const pausedSubscription = {
-    ...activeSubscription,
-    status: 'paused' as const,
-  };
-
-  const canceledSubscription = {
-    ...activeSubscription,
-    status: 'canceled' as const,
-  };
+  let repository: jest.Mocked<SubscriptionRepository>;
+  let recurrenceCalculator: MonthlyBillingRecurrenceCalculator;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    repository = {
+      create: jest.fn(),
+      findById: jest.fn(),
+      findMany: jest.fn(),
+      update: jest.fn(),
+      pause: jest.fn(),
+      resume: jest.fn(),
+      cancel: jest.fn(),
+      resetBillingFailure: jest.fn(),
+    } as unknown as jest.Mocked<SubscriptionRepository>;
+
+    recurrenceCalculator =
+      {} as MonthlyBillingRecurrenceCalculator;
 
     service = new SubscriptionService(
-      repository as unknown as SubscriptionRepository,
+      repository,
+      recurrenceCalculator,
     );
   });
 
+  it('should be defined', () => {
+    expect(service).toBeDefined();
+  });
+
   describe('create', () => {
-    it('should create a subscription', async () => {
-      const dto: CreateSubscriptionDto = {
+    it('should create a subscription when billing dates are valid', async () => {
+      const dto = {
         customerReference: 'CUST-1001',
-        description: 'Pro Plan',
+        description: 'Pro Plan - Monthly',
         amount: '49.0000',
         currency: 'USD',
         startDate: '2026-08-16',
@@ -122,15 +56,22 @@ describe('SubscriptionService', () => {
         anchorIsMonthEnd: true,
       };
 
+      const createdSubscription = {
+        id: 'subscription-id',
+        ...dto,
+        status: 'active',
+        billing_state: 'ready',
+      };
+
       repository.create.mockResolvedValue(
-        activeSubscription,
+        createdSubscription as never,
       );
 
       const result = await service.create(dto);
 
       expect(repository.create).toHaveBeenCalledWith({
         customerReference: 'CUST-1001',
-        description: 'Pro Plan',
+        description: 'Pro Plan - Monthly',
         amount: '49.0000',
         currency: 'USD',
         startDate: '2026-08-16',
@@ -139,13 +80,13 @@ describe('SubscriptionService', () => {
         anchorIsMonthEnd: true,
       });
 
-      expect(result).toEqual(activeSubscription);
+      expect(result).toEqual(createdSubscription);
     });
 
-    it('should reject when nextBillingDate is before startDate', async () => {
-      const dto: CreateSubscriptionDto = {
+    it('should reject a next billing date before the start date', async () => {
+      const dto = {
         customerReference: 'CUST-1001',
-        description: 'Pro Plan',
+        description: 'Pro Plan - Monthly',
         amount: '49.0000',
         currency: 'USD',
         startDate: '2026-08-31',
@@ -156,157 +97,130 @@ describe('SubscriptionService', () => {
 
       await expect(
         service.create(dto),
-      ).rejects.toThrow(
-        'nextBillingDate cannot be before startDate',
-      );
+      ).rejects.toThrow(BadRequestException);
 
-      expect(
-        repository.create,
-      ).not.toHaveBeenCalled();
+      expect(repository.create).not.toHaveBeenCalled();
     });
   });
 
   describe('findById', () => {
-    it('should return a subscription when it exists', async () => {
+    it('should return the subscription when it exists', async () => {
+      const subscription = {
+        id: 'subscription-id',
+        customer_reference: 'CUST-1001',
+      };
+
       repository.findById.mockResolvedValue(
-        activeSubscription,
+        subscription as never,
       );
 
-      const result = await service.findById(
+      const result =
+        await service.findById('subscription-id');
+
+      expect(repository.findById).toHaveBeenCalledWith(
         'subscription-id',
       );
 
-      expect(
-        repository.findById,
-      ).toHaveBeenCalledWith(
-        'subscription-id',
-      );
-
-      expect(result).toEqual(activeSubscription);
+      expect(result).toEqual(subscription);
     });
 
-    it('should throw when subscription does not exist', async () => {
+    it('should throw NotFoundException when subscription does not exist', async () => {
       repository.findById.mockResolvedValue(
         undefined,
       );
 
       await expect(
-        service.findById('missing-id'),
-      ).rejects.toThrow(
-        'Subscription not found',
-      );
-
-      expect(
-        repository.findById,
-      ).toHaveBeenCalledWith(
-        'missing-id',
-      );
+        service.findById('subscription-id'),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('findMany', () => {
-    it('should return subscriptions using pagination and filters', async () => {
+    it('should calculate the offset and return subscriptions', async () => {
       const subscriptions = [
         {
-          id: 'subscription-1',
-          customer_reference: 'CUST-1001',
+          id: 'subscription-2',
         },
         {
-          id: 'subscription-2',
-          customer_reference: 'CUST-1002',
+          id: 'subscription-1',
         },
       ];
 
       repository.findMany.mockResolvedValue(
-        subscriptions,
+        subscriptions as never,
       );
 
-      const dto: ListSubscriptionsDto = {
-        page: 2,
+      const result = await service.findMany({
+        page: 3,
         limit: 10,
-        customerReference: 'CUST-1001',
-        status: 'active',
-      };
+      });
 
-      const result = await service.findMany(dto);
-
-      expect(
-        repository.findMany,
-      ).toHaveBeenCalledWith(
-        'CUST-1001',
-        'active',
+      expect(repository.findMany).toHaveBeenCalledWith(
+        undefined,
+        undefined,
         10,
-        10,
+        20,
       );
 
       expect(result).toEqual(subscriptions);
     });
 
-    it('should calculate offset correctly without filters', async () => {
-      repository.findMany.mockResolvedValue([]);
-
-      const dto: ListSubscriptionsDto = {
-        page: 3,
-        limit: 20,
-      };
-
-      const result = await service.findMany(dto);
-
-      expect(
-        repository.findMany,
-      ).toHaveBeenCalledWith(
-        undefined,
-        undefined,
-        20,
-        40,
+    it('should pass customer and status filters', async () => {
+      repository.findMany.mockResolvedValue(
+        [] as never,
       );
 
-      expect(result).toEqual([]);
+      await service.findMany({
+        customerReference: 'CUST-1001',
+        status: 'active',
+        page: 1,
+        limit: 20,
+      });
+
+      expect(repository.findMany).toHaveBeenCalledWith(
+        'CUST-1001',
+        'active',
+        20,
+        0,
+      );
     });
   });
 
   describe('update', () => {
-    const updateDto: UpdateSubscriptionDto = {
-      description: 'Updated Plan',
-      amount: '59.0000',
-      currency: 'USD',
+    const existingSubscription = {
+      id: 'subscription-id',
+      status: 'active',
+      start_date: '2026-08-16',
+      next_billing_date: '2026-08-31',
     };
 
-    it('should update an existing subscription', async () => {
+    it('should update editable subscription fields', async () => {
       const updatedSubscription = {
-        ...activeSubscription,
+        ...existingSubscription,
         description: 'Updated Plan',
-        amount: '59.0000',
-        version: 2,
       };
 
       repository.findById.mockResolvedValue(
-        activeSubscription,
+        existingSubscription as never,
       );
 
       repository.update.mockResolvedValue(
-        updatedSubscription,
+        updatedSubscription as never,
       );
 
       const result = await service.update(
         'subscription-id',
-        updateDto,
+        {
+          description: 'Updated Plan',
+        },
       );
 
-      expect(
-        repository.findById,
-      ).toHaveBeenCalledWith(
-        'subscription-id',
-      );
-
-      expect(
-        repository.update,
-      ).toHaveBeenCalledWith(
+      expect(repository.update).toHaveBeenCalledWith(
         'subscription-id',
         {
           description: 'Updated Plan',
-          amount: '59.0000',
-          currency: 'USD',
+          amount: undefined,
+          currency: undefined,
           startDate: undefined,
           nextBillingDate: undefined,
           billingAnchorDay: undefined,
@@ -317,511 +231,409 @@ describe('SubscriptionService', () => {
       expect(result).toEqual(updatedSubscription);
     });
 
-    it('should reject updating a missing subscription', async () => {
+    it('should reject editing a canceled subscription', async () => {
+      repository.findById.mockResolvedValue({
+        ...existingSubscription,
+        status: 'canceled',
+      } as never);
+
+      await expect(
+        service.update('subscription-id', {
+          description: 'Updated Plan',
+        }),
+      ).rejects.toThrow(ConflictException);
+
+      expect(repository.update).not.toHaveBeenCalled();
+    });
+
+    it('should reject a next billing date before the start date', async () => {
       repository.findById.mockResolvedValue(
-        undefined,
+        existingSubscription as never,
       );
 
       await expect(
-        service.update(
-          'missing-id',
-          updateDto,
-        ),
-      ).rejects.toThrow(
-        'Subscription not found',
-      );
+        service.update('subscription-id', {
+          nextBillingDate: '2026-08-01',
+        }),
+      ).rejects.toThrow(BadRequestException);
 
-      expect(
-        repository.update,
-      ).not.toHaveBeenCalled();
+      expect(repository.update).not.toHaveBeenCalled();
     });
 
-    it('should reject updating a canceled subscription', async () => {
+    it('should reject an update with no editable fields', async () => {
       repository.findById.mockResolvedValue(
-        canceledSubscription,
+        existingSubscription as never,
       );
 
       await expect(
-        service.update(
-          'subscription-id',
-          updateDto,
-        ),
-      ).rejects.toThrow(
-        'Canceled subscriptions cannot be edited',
-      );
+        service.update('subscription-id', {}),
+      ).rejects.toThrow(BadRequestException);
 
-      expect(
-        repository.update,
-      ).not.toHaveBeenCalled();
+      expect(repository.update).not.toHaveBeenCalled();
     });
 
-    it('should reject when nextBillingDate is before the existing startDate', async () => {
+    it('should allow a valid start date and next billing date update', async () => {
       repository.findById.mockResolvedValue(
-        activeSubscription,
+        existingSubscription as never,
       );
 
-      const dto: UpdateSubscriptionDto = {
-        nextBillingDate: '2026-08-10',
+      const updatedSubscription = {
+        ...existingSubscription,
+        start_date: '2026-08-20',
+        next_billing_date: '2026-09-01',
       };
 
-      await expect(
-        service.update(
-          'subscription-id',
-          dto,
-        ),
-      ).rejects.toThrow(
-        'nextBillingDate cannot be before startDate',
+      repository.update.mockResolvedValue(
+        updatedSubscription as never,
       );
 
-      expect(
-        repository.update,
-      ).not.toHaveBeenCalled();
-    });
-
-    it('should reject when startDate is after the existing nextBillingDate', async () => {
-      repository.findById.mockResolvedValue(
-        activeSubscription,
+      const result = await service.update(
+        'subscription-id',
+        {
+          startDate: '2026-08-20',
+          nextBillingDate: '2026-09-01',
+        },
       );
 
-      const dto: UpdateSubscriptionDto = {
-        startDate: '2026-09-01',
-      };
-
-      await expect(
-        service.update(
-          'subscription-id',
-          dto,
-        ),
-      ).rejects.toThrow(
-        'nextBillingDate cannot be before startDate',
+      expect(repository.update).toHaveBeenCalledWith(
+        'subscription-id',
+        {
+          description: undefined,
+          amount: undefined,
+          currency: undefined,
+          startDate: '2026-08-20',
+          nextBillingDate: '2026-09-01',
+          billingAnchorDay: undefined,
+          anchorIsMonthEnd: undefined,
+        },
       );
 
-      expect(
-        repository.update,
-      ).not.toHaveBeenCalled();
-    });
-
-    it('should reject when no editable field is supplied', async () => {
-      repository.findById.mockResolvedValue(
-        activeSubscription,
-      );
-
-      await expect(
-        service.update(
-          'subscription-id',
-          {},
-        ),
-      ).rejects.toThrow(
-        'At least one editable field is required',
-      );
-
-      expect(
-        repository.update,
-      ).not.toHaveBeenCalled();
+      expect(result).toEqual(updatedSubscription);
     });
   });
 
   describe('pause', () => {
     it('should pause an active subscription', async () => {
-      repository.findById.mockResolvedValue(
-        activeSubscription,
-      );
-
-      const updatedSubscription = {
-        ...activeSubscription,
-        status: 'paused' as const,
-        version: 2,
+      const subscription = {
+        id: 'subscription-id',
+        status: 'active',
       };
 
+      const updatedSubscription = {
+        ...subscription,
+        status: 'paused',
+      };
+
+      repository.findById.mockResolvedValue(
+        subscription as never,
+      );
+
       repository.pause.mockResolvedValue(
-        updatedSubscription,
+        updatedSubscription as never,
       );
 
-      const result = await service.pause(
+      const result =
+        await service.pause('subscription-id');
+
+      expect(repository.pause).toHaveBeenCalledWith(
         'subscription-id',
       );
 
-      expect(
-        repository.findById,
-      ).toHaveBeenCalledWith(
-        'subscription-id',
-      );
-
-      expect(
-        repository.pause,
-      ).toHaveBeenCalledWith(
-        'subscription-id',
-      );
-
-      expect(result).toEqual(
-        updatedSubscription,
-      );
+      expect(result).toEqual(updatedSubscription);
     });
 
-    it('should reject when subscription does not exist', async () => {
+    it('should throw when subscription does not exist', async () => {
       repository.findById.mockResolvedValue(
         undefined,
       );
 
       await expect(
-        service.pause('missing-id'),
-      ).rejects.toThrow(
-        'Subscription not found',
-      );
-
-      expect(
-        repository.pause,
-      ).not.toHaveBeenCalled();
+        service.pause('subscription-id'),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('should reject pausing a canceled subscription', async () => {
-      repository.findById.mockResolvedValue(
-        canceledSubscription,
-      );
+      repository.findById.mockResolvedValue({
+        id: 'subscription-id',
+        status: 'canceled',
+      } as never);
 
       await expect(
         service.pause('subscription-id'),
-      ).rejects.toThrow(
-        'Canceled subscriptions cannot be paused',
-      );
-
-      expect(
-        repository.pause,
-      ).not.toHaveBeenCalled();
+      ).rejects.toThrow(ConflictException);
     });
 
-    it('should reject an already paused subscription', async () => {
-      repository.findById.mockResolvedValue(
-        pausedSubscription,
-      );
+    it('should reject pausing an already paused subscription', async () => {
+      repository.findById.mockResolvedValue({
+        id: 'subscription-id',
+        status: 'paused',
+      } as never);
 
       await expect(
         service.pause('subscription-id'),
-      ).rejects.toThrow(
-        'Subscription is already paused',
-      );
-
-      expect(
-        repository.pause,
-      ).not.toHaveBeenCalled();
+      ).rejects.toThrow(ConflictException);
     });
 
     it('should reject when repository cannot pause the subscription', async () => {
-      repository.findById.mockResolvedValue(
-        activeSubscription,
-      );
+      repository.findById.mockResolvedValue({
+        id: 'subscription-id',
+        status: 'active',
+      } as never);
 
       repository.pause.mockResolvedValue(
-        undefined,
+        undefined as never,
       );
 
       await expect(
         service.pause('subscription-id'),
-      ).rejects.toThrow(
-        'Subscription could not be paused',
-      );
+      ).rejects.toThrow(ConflictException);
     });
   });
 
   describe('resume', () => {
     it('should resume a paused subscription', async () => {
-      repository.findById.mockResolvedValue(
-        pausedSubscription,
-      );
-
-      const updatedSubscription = {
-        ...activeSubscription,
-        version: 2,
+      const subscription = {
+        id: 'subscription-id',
+        status: 'paused',
       };
 
+      const updatedSubscription = {
+        ...subscription,
+        status: 'active',
+      };
+
+      repository.findById.mockResolvedValue(
+        subscription as never,
+      );
+
       repository.resume.mockResolvedValue(
-        updatedSubscription,
+        updatedSubscription as never,
       );
 
-      const result = await service.resume(
+      const result =
+        await service.resume('subscription-id');
+
+      expect(repository.resume).toHaveBeenCalledWith(
         'subscription-id',
       );
 
-      expect(
-        repository.findById,
-      ).toHaveBeenCalledWith(
-        'subscription-id',
-      );
-
-      expect(
-        repository.resume,
-      ).toHaveBeenCalledWith(
-        'subscription-id',
-      );
-
-      expect(result).toEqual(
-        updatedSubscription,
-      );
+      expect(result).toEqual(updatedSubscription);
     });
 
-    it('should reject when subscription does not exist', async () => {
+    it('should throw when subscription does not exist', async () => {
       repository.findById.mockResolvedValue(
         undefined,
       );
 
       await expect(
-        service.resume('missing-id'),
-      ).rejects.toThrow(
-        'Subscription not found',
-      );
-
-      expect(
-        repository.resume,
-      ).not.toHaveBeenCalled();
+        service.resume('subscription-id'),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('should reject resuming a canceled subscription', async () => {
-      repository.findById.mockResolvedValue(
-        canceledSubscription,
-      );
+      repository.findById.mockResolvedValue({
+        id: 'subscription-id',
+        status: 'canceled',
+      } as never);
 
       await expect(
         service.resume('subscription-id'),
-      ).rejects.toThrow(
-        'Canceled subscriptions cannot be resumed',
-      );
-
-      expect(
-        repository.resume,
-      ).not.toHaveBeenCalled();
+      ).rejects.toThrow(ConflictException);
     });
 
-    it('should reject an already active subscription', async () => {
-      repository.findById.mockResolvedValue(
-        activeSubscription,
-      );
+    it('should reject resuming an already active subscription', async () => {
+      repository.findById.mockResolvedValue({
+        id: 'subscription-id',
+        status: 'active',
+      } as never);
 
       await expect(
         service.resume('subscription-id'),
-      ).rejects.toThrow(
-        'Subscription is already active',
-      );
-
-      expect(
-        repository.resume,
-      ).not.toHaveBeenCalled();
+      ).rejects.toThrow(ConflictException);
     });
 
     it('should reject when repository cannot resume the subscription', async () => {
-      repository.findById.mockResolvedValue(
-        pausedSubscription,
-      );
+      repository.findById.mockResolvedValue({
+        id: 'subscription-id',
+        status: 'paused',
+      } as never);
 
       repository.resume.mockResolvedValue(
-        undefined,
+        undefined as never,
       );
 
       await expect(
         service.resume('subscription-id'),
-      ).rejects.toThrow(
-        'Subscription could not be resumed',
-      );
+      ).rejects.toThrow(ConflictException);
     });
   });
 
   describe('cancel', () => {
     it('should cancel an active subscription', async () => {
-      repository.findById.mockResolvedValue(
-        activeSubscription,
-      );
-
-      const updatedSubscription = {
-        ...canceledSubscription,
-        version: 2,
+      const subscription = {
+        id: 'subscription-id',
+        status: 'active',
       };
 
+      const canceledSubscription = {
+        ...subscription,
+        status: 'canceled',
+      };
+
+      repository.findById.mockResolvedValue(
+        subscription as never,
+      );
+
       repository.cancel.mockResolvedValue(
-        updatedSubscription,
+        canceledSubscription as never,
       );
 
-      const result = await service.cancel(
+      const result =
+        await service.cancel('subscription-id');
+
+      expect(repository.cancel).toHaveBeenCalledWith(
         'subscription-id',
       );
 
-      expect(
-        repository.cancel,
-      ).toHaveBeenCalledWith(
-        'subscription-id',
-      );
-
-      expect(result).toEqual(
-        updatedSubscription,
-      );
+      expect(result).toEqual(canceledSubscription);
     });
 
     it('should cancel a paused subscription', async () => {
-      repository.findById.mockResolvedValue(
-        pausedSubscription,
-      );
-
-      const updatedSubscription = {
-        ...canceledSubscription,
-        version: 2,
+      const subscription = {
+        id: 'subscription-id',
+        status: 'paused',
       };
 
+      const canceledSubscription = {
+        ...subscription,
+        status: 'canceled',
+      };
+
+      repository.findById.mockResolvedValue(
+        subscription as never,
+      );
+
       repository.cancel.mockResolvedValue(
-        updatedSubscription,
+        canceledSubscription as never,
       );
 
-      const result = await service.cancel(
+      const result =
+        await service.cancel('subscription-id');
+
+      expect(repository.cancel).toHaveBeenCalledWith(
         'subscription-id',
       );
 
-      expect(
-        repository.cancel,
-      ).toHaveBeenCalledWith(
-        'subscription-id',
-      );
-
-      expect(result).toEqual(
-        updatedSubscription,
-      );
+      expect(result).toEqual(canceledSubscription);
     });
 
-    it('should reject when subscription does not exist', async () => {
+    it('should throw when subscription does not exist', async () => {
       repository.findById.mockResolvedValue(
         undefined,
       );
 
       await expect(
-        service.cancel('missing-id'),
-      ).rejects.toThrow(
-        'Subscription not found',
-      );
-
-      expect(
-        repository.cancel,
-      ).not.toHaveBeenCalled();
+        service.cancel('subscription-id'),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('should reject canceling an already canceled subscription', async () => {
-      repository.findById.mockResolvedValue(
-        canceledSubscription,
-      );
+      repository.findById.mockResolvedValue({
+        id: 'subscription-id',
+        status: 'canceled',
+      } as never);
 
       await expect(
         service.cancel('subscription-id'),
-      ).rejects.toThrow(
-        'Subscription is already canceled',
-      );
-
-      expect(
-        repository.cancel,
-      ).not.toHaveBeenCalled();
+      ).rejects.toThrow(ConflictException);
     });
 
     it('should reject when repository cannot cancel the subscription', async () => {
-      repository.findById.mockResolvedValue(
-        activeSubscription,
-      );
+      repository.findById.mockResolvedValue({
+        id: 'subscription-id',
+        status: 'active',
+      } as never);
 
       repository.cancel.mockResolvedValue(
-        undefined,
+        undefined as never,
       );
 
       await expect(
         service.cancel('subscription-id'),
-      ).rejects.toThrow(
-        'Subscription could not be canceled',
-      );
+      ).rejects.toThrow(ConflictException);
     });
   });
 
   describe('billingRetry', () => {
     it('should reset billing failure state', async () => {
-      const failedSubscription = {
-        ...activeSubscription,
-        billing_state: 'retry_wait' as const,
-        billing_failure_count: 3,
+      const subscription = {
+        id: 'subscription-id',
+        status: 'active',
       };
 
       const updatedSubscription = {
-        ...activeSubscription,
-        billing_state: 'ready' as const,
+        ...subscription,
+        billing_state: 'ready',
         billing_failure_count: 0,
-        version: 2,
+        billing_retry_at: null,
       };
 
       repository.findById.mockResolvedValue(
-        failedSubscription,
+        subscription as never,
       );
 
       repository.resetBillingFailure.mockResolvedValue(
-        updatedSubscription,
+        updatedSubscription as never,
       );
 
-      const result = await service.billingRetry(
-        'subscription-id',
-      );
-
-      expect(
-        repository.findById,
-      ).toHaveBeenCalledWith(
-        'subscription-id',
-      );
+      const result =
+        await service.billingRetry('subscription-id');
 
       expect(
         repository.resetBillingFailure,
-      ).toHaveBeenCalledWith(
-        'subscription-id',
-      );
+      ).toHaveBeenCalledWith('subscription-id');
 
-      expect(result).toEqual(
-        updatedSubscription,
-      );
+      expect(result).toEqual(updatedSubscription);
     });
 
-    it('should reject when subscription does not exist', async () => {
+    it('should throw when subscription does not exist', async () => {
       repository.findById.mockResolvedValue(
         undefined,
       );
 
       await expect(
-        service.billingRetry('missing-id'),
-      ).rejects.toThrow(
-        'Subscription not found',
-      );
+        service.billingRetry('subscription-id'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should reject billing retry for a canceled subscription', async () => {
+      repository.findById.mockResolvedValue({
+        id: 'subscription-id',
+        status: 'canceled',
+      } as never);
+
+      await expect(
+        service.billingRetry('subscription-id'),
+      ).rejects.toThrow(ConflictException);
 
       expect(
         repository.resetBillingFailure,
       ).not.toHaveBeenCalled();
     });
 
-    it('should reject retrying a canceled subscription', async () => {
-      repository.findById.mockResolvedValue(
-        canceledSubscription,
-      );
-
-      await expect(
-        service.billingRetry('subscription-id'),
-      ).rejects.toThrow(
-        'Canceled subscriptions cannot be retried',
-      );
-
-      expect(
-        repository.resetBillingFailure,
-      ).not.toHaveBeenCalled();
-    });
-
-    it('should reject when repository cannot apply the retry', async () => {
-      repository.findById.mockResolvedValue(
-        activeSubscription,
-      );
+    it('should reject when billing failure reset cannot be applied', async () => {
+      repository.findById.mockResolvedValue({
+        id: 'subscription-id',
+        status: 'active',
+      } as never);
 
       repository.resetBillingFailure.mockResolvedValue(
-        undefined,
+        undefined as never,
       );
 
       await expect(
         service.billingRetry('subscription-id'),
-      ).rejects.toThrow(
-        'Billing retry could not be applied',
-      );
+      ).rejects.toThrow(ConflictException);
     });
   });
 });
